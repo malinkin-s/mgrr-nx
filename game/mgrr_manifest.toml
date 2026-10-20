@@ -1,0 +1,13 @@
+# ReXGlue manifest for Metal Gear Rising: Revengeance (Xbox 360, TitleID 4B4E080A).
+# game_root points at the user's own extracted disc (never committed); generated/ is ignored by git.
+[project]
+name = "mgrr"
+sdk_version = "0.10.0"
+game_root = "../x360_extracted"
+
+[entrypoint]
+file_path = "../x360_extracted/default.xex"
+out_directory_path = "generated/default"
+
+# Our own analysis (tools/to_rexglue.py), then hand-written findings (overrides.toml, applied last).
+includes = ["analysis_functions.toml", "analysis_switch_tables.toml", "overrides.toml"]

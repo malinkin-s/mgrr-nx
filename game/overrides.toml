@@ -1,0 +1,16 @@
+# Hand-written codegen findings for MGR:R (applied after the generated analysis_*.toml). Each entry says why.
+
+[functions]
+# Virtual-call thunks (lwz r11,20(r3); ... lwz r11,N(r10); mtctr r11; bctr). Reached only by plain `b` from the
+# stub table at 0x82668350..0x82668378, so the analyzer does not register them; .pdata lists them as functions.
+"0x8266A500" = { }
+"0x8266A518" = { }
+"0x8266A530" = { }
+"0x8266A548" = { }
+"0x8266A560" = { }
+# The analyzer ends this function at the first blr (0x824E9BC4); its tail loc_824E9BC8 (mr r8,r10; b 0x824E9B9C)
+# jumps back into the body. .pdata: 0x824E9B60..0x824E9BD0.
+"0x824E9B60" = { end = 0x824E9BD0 }
+# Big dispatch function (switch with bdz chains). With only its start declared the analyzer splits it at
+# 0x82ADBC0C, a label inside it (excluded in tools/to_rexglue.py), and 29 conditional branches stay unresolved.
+"0x82ADBA90" = { end = 0x82ADBE94 }
