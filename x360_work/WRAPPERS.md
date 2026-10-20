@@ -1,0 +1,153 @@
+# 360 engine wrapper layer (0x8278E000–0x82796800) — what is known
+
+Every function below is a thin engine-side wrapper: it (optionally) compares the new value with a cached copy in a global
+state-cache struct and calls one or two functions of the D3D core. PC has the same pattern (wrapper → `IDirect3DDevice9` vtable).
+
+Confidence: **high** = argument profile and role match a PC wrapper with a known D3D method; **medium** = role inferred from
+one independent signal; **low** = hint only.
+
+## PC wrapper dictionary (certain: constants pushed to SetRenderState / vtable offset)
+
+| PC wrapper | callers | what |
+|---|---|---|
+| 0x13187f0 | 42 | SetRenderState(CULLMODE=22) |
+| 0x1318830 | 12 | SetRenderState(SRGBWRITEENABLE=194) |
+| 0x1318870 | 52 | SetRenderState(ZENABLE=7) |
+| 0x13188c0 | 43 | SetRenderState(ZWRITEENABLE=14) |
+| 0x1318910 | 1 | SetRenderState(ZFUNC=23) |
+| 0x1318950 | 37 | SetRenderState(ALPHATESTENABLE=15) |
+| 0x13189a0 | 6 | SetRenderState(ALPHAREF=24 / ALPHAFUNC=25) |
+| 0x1318a10 | 81 | SetRenderState(ALPHABLENDENABLE=27) |
+| 0x1318a50 | 4 | SetRenderState(206 SEPARATEALPHABLENDENABLE) |
+| 0x1318af0 | 75 | SetBlendFunc(src, dst, op) → SRCBLEND/DESTBLEND/BLENDOP |
+| 0x1318b40 | 24 | SetBlendFuncSeparateAlpha(…) → 207/208/209 |
+| 0x1318bf0 | 9 | SetRenderState(COLORWRITEENABLE=168) |
+| 0x1318c30 | 23 | SetRenderState(COLORWRITEENABLE=168) |
+| 0x1318ce0 | 51 | SetRenderState(COLORWRITEENABLE=168) |
+| 0x1318f00 | 24 | SetRenderState(STENCILENABLE=52 / TWOSIDEDSTENCIL=185) |
+| 0x1318f80 | 11 | SetRenderState(STENCILFAIL/ZFAIL/PASS 53–55) |
+| 0x1319010 | 13 | SetRenderState(STENCILFUNC/REF/MASK 56–58) |
+| 0x13190a0 | 11 | SetRenderState(STENCILWRITEMASK=59) |
+| 0x1317dd0 | 3 | SetRenderState(SCISSORTESTENABLE=174) |
+| 0x1318eb0 | 3 | SetRenderState(MULTISAMPLEANTIALIAS=161) |
+| 0x1317d20 | 24 | IDirect3DDevice9::Clear (vt 0xAC) |
+| 0x131cad0 | 68 | SetVertexShaderConstantF (vt 0x178) |
+| 0x131cb10 | 110 | SetPixelShaderConstantF (vt 0x1B4) |
+| 0x1317f70 | 12 | SetIndices (vt 0x1A0) |
+| 0x1318000 | 27 | SetVertexDeclaration+SetVertexShader (vt 0x15C,0x170) |
+| 0x1318460 | 7 | SetVertexDeclaration+SetVertexShader+SetPixelShader |
+
+## 360 wrappers with a tentative identity
+
+| wrapper | callers | D3D core callee(s) | identity | confidence | evidence |
+|---|---|---|---|---|---|
+| 0x82796620 | 103 | 826ac190 | SetPixelShaderConstantF(start, ptr, count) | high | arg histogram ≈ PC 0x131CB10 (vt 0x1B4): start regs 184–190, count 4 (83/103 vs 94/110), 16, 1, 64, 5 |
+| 0x827966a0 | 60 | 826ac0b8 | SetVertexShaderConstantF(start, ptr, count) | high | arg histogram ≈ PC 0x131CAD0 (vt 0x178): count 4 (40/60 vs 43/68), 16, 64 |
+| 0x82791750 | 22 | 826bc398 | Clear(color, flags…) | medium-high | 22 call sites vs PC 0x1317D20 (vt 0xAC) 24; args: color 0xFF000000 / 0 / -1, flags 15, 63, 16, 48 |
+| 0x82790aa0 | 10 | 826b6cd8 | SetStencilWriteMask(mask) | medium-high | arg set {255, 0} and 10 callers vs PC 0x13190A0 (11 callers, SetRenderState 59); last field of the state cache on both |
+| 0x82792740 | 38 | 826aed70 | CreateTexture/CreateRenderTarget-like (w=r4, h=r5) | medium | sizes 1280×720, 1024×768, 64/128/256 squares; 38 callers |
+| 0x82795548 | 5 | 826aed70 | CreateRenderTarget/DepthStencil-like (w=r4, h=r5, format=r6) | low-medium | 1280×720 / 1024×768, r6 ∈ {2,3} |
+| 0x82791308 | 198 | 826b8670 | SetTexture-like (slot=r3, 0..3) | low | 198 callers, r3 ∈ {0:89,1:75,2:23,3:10} |
+| 0x82790ed8 | 107 | 826b6348 | boolean render-state wrapper (cache field), 107 callers | low | r3 ∈ {1,0}; same cache pattern as PC state wrappers |
+| 0x82791148 | 80 | 826b62b0 | render-state wrapper (cache field), 80 callers | low | r3 ∈ {0:33, 6:11, 2:3} |
+| 0x8278fa28 | 26 | 826ab228 | Release<T> helper (26 callers) | medium | calls 0x826AB228 (atomic refcount decrement) |
+
+## All 360 wrappers (profile)
+
+| wrapper | callers | insns | core callee(s) | arg histogram (top) |
+|---|---|---|---|---|
+| 0x82791308 | 198 | 41 | 826b8670 | {"r3": {"0": 89, "1": 75, "2": 23, "3": 10}} |
+| 0x82790d60 | 112 | 25 | 826b6f78 | {"r3": {"7": 1}} |
+| 0x82790ed8 | 107 | 25 | 826b6348 | {"r3": {"1": 48, "0": 35}} |
+| 0x82796620 | 103 | 32 | 826ac190 | {"r3": {"185": 13, "184": 10, "186": 8, "187": 7, "190": 4}, "r5": {"4": 83, "16": 7, "1": 3, "64": 1, "5": 1}} |
+| 0x82795260 | 92 | 36 | 826b2090 826ab228 826b20d0 | {"r4": {"2203254784": 2}, "r5": {"2203254784": 1}, "r6": {"2205483008": 1}, "r7": {"2203254784": 1}} |
+| 0x82791148 | 80 | 25 | 826b62b0 | {"r3": {"0": 33, "6": 11, "2": 3}, "r6": {"2182610944": 1}} |
+| 0x82792c98 | 72 | 47 | 826ab788 | {} |
+| 0x827966a0 | 60 | 32 | 826ac0b8 | {"r3": {"184": 6, "189": 5, "191": 4, "190": 3, "186": 3}, "r5": {"4": 40, "16": 12, "64": 1}} |
+| 0x82792740 | 38 | 85 | 826aed70 | {"r4": {"1280": 9, "64": 8, "128": 7, "256": 4, "320": 3}, "r5": {"720": 9, "64": 8, "128": 7, "256": 4, "176": 3}, "r6": {"0": 37}, "r7": {"0": 36}} |
+| 0x82792540 | 36 | 31 | 826b2090 826ab228 826b20d0 | {} |
+| 0x827910e0 | 33 | 26 | 826b69d8 | {"r3": {"1": 2}} |
+| 0x82791078 | 32 | 26 | 826b6a18 | {"r3": {"0": 3, "1": 1}} |
+| 0x82790768 | 29 | 26 | 826b6a80 826b6ac0 | {"r3": {"0": 18, "1": 11}, "r4": {"0": 29}} |
+| 0x8278fa28 | 26 | 25 | 826ab228 | {} |
+| 0x827903e0 | 24 | 29 | 826b6468 826b64f8 826b63d8 | {} |
+| 0x82791750 | 22 | 29 | 826bc398 | {"r3": {"0": 13, "4278190080": 4, "-1": 3}, "r5": {"15": 14, "63": 3, "16": 2, "48": 1}} |
+| 0x82790e88 | 11 | 20 | 826b66d8 | {"r3": {"0": 4, "1": 4}} |
+| 0x82792fb8 | 11 | 47 | 826ab7d8 | {} |
+| 0x82790aa0 | 10 | 25 | 826b6cd8 | {"r3": {"255": 3, "0": 2}} |
+| 0x82792990 | 9 | 32 | 826b2090 826ab228 826b20d0 | {} |
+| 0x8278fc98 | 8 | 19 | 826aa720 | {} |
+| 0x827912b0 | 8 | 22 | 826b8790 | {} |
+| 0x82790368 | 6 | 29 | 826b65f8 826b6668 826b6588 | {} |
+| 0x827941b8 | 6 | 170 | 826bb0d0 | {"r5": {"0": 5}, "r6": {"0": 1}} |
+| 0x8278fef0 | 5 | 19 | 826aa730 | {} |
+| 0x82791010 | 5 | 25 | 826b6a48 | {"r3": {"6": 4, "4": 1}} |
+| 0x82792170 | 5 | 45 | 826acdf8 | {} |
+| 0x82795548 | 5 | 78 | 826aed70 | {"r4": {"1024": 1, "768": 1, "1280": 1}, "r5": {"1024": 1, "768": 1, "720": 1}, "r6": {"2": 3, "3": 2}} |
+| 0x8278e538 | 4 | 38 | 826b8da8 | {"r5": {"2205089792": 1}, "r6": {"2205089792": 1}, "r7": {"2205351936": 1}} |
+| 0x8278edc0 | 4 | 26 | 826ab228 | {} |
+| 0x8278ee38 | 4 | 26 | 826ab228 | {} |
+| 0x827914d0 | 4 | 35 | 826ac9b8 | {} |
+| 0x8278fe48 | 3 | 23 | 826ab7d8 | {} |
+| 0x82790c50 | 3 | 26 | 826b6938 | {} |
+| 0x82791430 | 3 | 39 | 826b8578 826b8d98 | {"r3": {"1004": 1}, "r4": {"54": 1}, "r5": {"180": 1}, "r6": {"180": 1}} |
+| 0x827920b8 | 3 | 45 | 826acc10 | {} |
+| 0x82794cb0 | 3 | 38 | 826afe80 | {} |
+| 0x8278e0a0 | 2 | 121 | 826bb0d0 | {"r3": {"0": 1, "1024": 1}} |
+| 0x8278f258 | 2 | 26 | 826aeac0 | {} |
+| 0x8278f9e8 | 2 | 16 | 826ab228 | {"r7": {"2203320320": 1}} |
+| 0x82791828 | 2 | 38 | 826bb0d0 826b3510 826b20e0 | {} |
+| 0x82794010 | 2 | 22 | 826b59b0 826b5790 | {} |
+| 0x82794d48 | 2 | 38 | 826afe80 | {} |
+| 0x8278dfc8 | 1 | 23 | 826bcd40 | {} |
+| 0x8278e028 | 1 | 29 | 826bc928 | {} |
+| 0x8278e288 | 1 | 110 | 826bb0d0 | {} |
+| 0x8278e498 | 1 | 40 | 826b8820 826b9540 | {} |
+| 0x8278e640 | 1 | 22 | 826b2fc0 | {} |
+| 0x8278eeb0 | 1 | 23 | 826ac410 | {} |
+| 0x8278ef10 | 1 | 23 | 826ac618 | {} |
+| 0x8278f078 | 1 | 27 | 826b0130 | {} |
+| 0x8278f2c0 | 1 | 26 | 826aeac0 | {} |
+| 0x8278f838 | 1 | 30 | 826ac938 | {} |
+| 0x82790108 | 1 | 29 | 826aefd0 | {} |
+| 0x82790238 | 1 | 36 | 826b79d8 826b7a08 | {} |
+| 0x827902e8 | 1 | 24 | 826b6fb8 826b6ff8 826b7038 | {} |
+| 0x827904a0 | 1 | 23 | 826b6770 826b67d0 | {} |
+| 0x827905d8 | 1 | 21 | 826b6e80 | {} |
+| 0x827906a8 | 1 | 24 | 826b6af8 826b6c98 826b6cb8 | {} |
+| 0x82790708 | 1 | 24 | 826b6b28 826b6b60 826b6b98 | {} |
+| 0x82790fa8 | 1 | 26 | 826b6310 | {} |
+| 0x827913b0 | 1 | 19 | 826ac830 | {} |
+| 0x82791560 | 1 | 123 | 826bb0d0 | {"r6": {"2205483008": 1}} |
+| 0x82791928 | 1 | 43 | 826b7130 826b5790 826b9540 826b9268 | {} |
+| 0x827919f8 | 1 | 22 | 826b2008 | {} |
+| 0x82791a50 | 1 | 40 | 826b5a08 | {} |
+| 0x82791c48 | 1 | 76 | 826aa720 826aa730 826ab788 | {} |
+| 0x82792338 | 1 | 36 | 826afcf8 826b1aa8 | {} |
+| 0x827935f8 | 1 | 29 | 826aefd0 | {} |
+| 0x82793d18 | 1 | 49 | 826b8670 826b8790 | {} |
+| 0x82794068 | 1 | 83 | 826b7078 826b8d98 826b69d8 | {} |
+| 0x82794460 | 1 | 54 | 826b9268 | {} |
+| 0x82794540 | 1 | 118 | 826b2418 826b21f0 826b7b30 826aec50 826b7b30 826b2ff0 826b2fe8 | {} |
+| 0x82795d80 | 1 | 40 | 826b7cf8 826b7b50 | {} |
+| 0x82796128 | 1 | 75 | 826b7870 826b7838 826b88a8 | {} |
+| 0x8278e440 | 0 | 22 | 826b9268 | {} |
+| 0x8278e600 | 0 | 16 | 826b2008 | {} |
+| 0x8278e698 | 0 | 44 | 826af1e0 | {} |
+| 0x8278f108 | 0 | 16 | 826afcf8 | {} |
+| 0x8278f148 | 0 | 16 | 826afcf8 | {} |
+| 0x8278f7f8 | 0 | 16 | 826ab228 | {} |
+| 0x8278fa90 | 0 | 19 | 826ab228 | {} |
+| 0x8278fbc0 | 0 | 19 | 826aa720 | {} |
+| 0x8278fc10 | 0 | 21 | 826ab788 | {} |
+| 0x8278fdf8 | 0 | 19 | 826aa730 | {} |
+| 0x82790650 | 0 | 14 | 826b6938 | {} |
+| 0x82790cb8 | 0 | 14 | 826b7078 | {} |
+| 0x827911b0 | 0 | 24 | 826b62e0 | {} |
+| 0x82791400 | 0 | 12 | 826b8d98 | {} |
+| 0x827917c8 | 0 | 24 | 826b7b20 | {} |
+| 0x827918c0 | 0 | 19 | 826b59b0 826b5790 | {} |
+| 0x827924f8 | 0 | 17 | 826ad070 | {} |
+| 0x82793fb0 | 0 | 12 | 826b8d98 | {} |
+| 0x82795130 | 0 | 17 | 826ad070 | {} |
+| 0x82795c98 | 0 | 21 | 826b7f98 | {} |

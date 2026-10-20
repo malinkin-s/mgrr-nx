@@ -1,0 +1,1220 @@
+[
+ {
+  "addr": "0x826aa300",
+  "insns": 6,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826a1338",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa318",
+  "insns": 6,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826a1520",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa330",
+  "insns": 6,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826a1520",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa348",
+  "insns": 35,
+  "callsites": 6,
+  "callers": 4,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa640",
+  "insns": 29,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x826d64b8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa6b8",
+  "insns": 26,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826d64b8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aa720",
+  "insns": 4,
+  "callsites": 66,
+  "callers": 49,
+  "example_caller": "0x822e98b0",
+  "setter": false,
+  "vd": [],
+  "note": "leaf helper (66 call sites): tail-calls 0x826aa3d8 with r4=[r3+24]&~3"
+ },
+ {
+  "addr": "0x826aa730",
+  "insns": 3,
+  "callsites": 11,
+  "callers": 11,
+  "example_caller": "0x8278fdf8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ab228",
+  "insns": 32,
+  "callsites": 223,
+  "callers": 54,
+  "example_caller": "0x822b1a38",
+  "setter": false,
+  "vd": [],
+  "note": "IDirect3DResource9::Release-like (atomic dec of refcount at +4, resource type in low nibble of +0)"
+ },
+ {
+  "addr": "0x826ab788",
+  "insns": 20,
+  "callsites": 6,
+  "callers": 6,
+  "example_caller": "0x8278fc10",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ab7d8",
+  "insns": 18,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x8278fe48",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac0b8",
+  "insns": 54,
+  "callsites": 4,
+  "callers": 4,
+  "example_caller": "0x826e36f8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac190",
+  "insns": 54,
+  "callsites": 4,
+  "callers": 4,
+  "example_caller": "0x826e3a18",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac268",
+  "insns": 23,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826e3540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac2c8",
+  "insns": 23,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826e3860",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac328",
+  "insns": 21,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826e3628",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac380",
+  "insns": 21,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826e3948",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac410",
+  "insns": 111,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278eeb0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac618",
+  "insns": 115,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278ef10",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac830",
+  "insns": 5,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827913b0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac938",
+  "insns": 32,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278f838",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ac9b8",
+  "insns": 58,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827914d0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826acad0",
+  "insns": 4,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826e7358",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826acc10",
+  "insns": 60,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827920b8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826acdf8",
+  "insns": 60,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82792170",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826acf38",
+  "insns": 38,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x82700ba0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ad070",
+  "insns": 5,
+  "callsites": 9,
+  "callers": 5,
+  "example_caller": "0x827924f8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ad088",
+  "insns": 6,
+  "callsites": 4,
+  "callers": 3,
+  "example_caller": "0x826d6260",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ad0a0",
+  "insns": 38,
+  "callsites": 4,
+  "callers": 4,
+  "example_caller": "0x827007e8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ad1c0",
+  "insns": 72,
+  "callsites": 5,
+  "callers": 4,
+  "example_caller": "0x82700ba0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ad660",
+  "insns": 86,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827015c0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ae488",
+  "insns": 189,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827007e8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826ae9f0",
+  "insns": 4,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aea00",
+  "insns": 1,
+  "callsites": 6,
+  "callers": 2,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aea08",
+  "insns": 46,
+  "callsites": 5,
+  "callers": 3,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aeac0",
+  "insns": 7,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x8278f258",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aeae0",
+  "insns": 45,
+  "callsites": 4,
+  "callers": 2,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aeb98",
+  "insns": 1,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aeba0",
+  "insns": 43,
+  "callsites": 4,
+  "callers": 2,
+  "example_caller": "0x826cddb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aec50",
+  "insns": 72,
+  "callsites": 4,
+  "callers": 4,
+  "example_caller": "0x826cdaa0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aed70",
+  "insns": 78,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82792740",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aeea8",
+  "insns": 38,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826d6260",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aef40",
+  "insns": 9,
+  "callsites": 4,
+  "callers": 2,
+  "example_caller": "0x826d6260",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aef68",
+  "insns": 17,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x826d69e0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aefb0",
+  "insns": 7,
+  "callsites": 2,
+  "callers": 1,
+  "example_caller": "0x826d69e0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826aefd0",
+  "insns": 99,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82790108",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826af160",
+  "insns": 5,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x826cd670",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826af1e0",
+  "insns": 27,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278e698",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826afcf8",
+  "insns": 98,
+  "callsites": 5,
+  "callers": 4,
+  "example_caller": "0x8278f108",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826afe80",
+  "insns": 172,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82794cb0",
+  "setter": false,
+  "vd": [],
+  "note": "GPU sync/resolve-like (EVENT_WRITE + REG_RMW + WAIT_REG_MEM)"
+ },
+ {
+  "addr": "0x826b0130",
+  "insns": 239,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278f078",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b1aa8",
+  "insns": 58,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82792338",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2008",
+  "insns": 33,
+  "callsites": 4,
+  "callers": 4,
+  "example_caller": "0x826d6358",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2090",
+  "insns": 16,
+  "callsites": 11,
+  "callers": 11,
+  "example_caller": "0x82792540",
+  "setter": false,
+  "vd": [],
+  "note": "sets [dev+11016] via 0x82306c78 (11 call sites)"
+ },
+ {
+  "addr": "0x826b20d0",
+  "insns": 4,
+  "callsites": 12,
+  "callers": 12,
+  "example_caller": "0x82792540",
+  "setter": false,
+  "vd": [],
+  "note": "clears [dev+11016] with eieio (12 call sites)"
+ },
+ {
+  "addr": "0x826b20e0",
+  "insns": 68,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791828",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b21f0",
+  "insns": 2,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82794540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2418",
+  "insns": 53,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82794540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2fc0",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278e640",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2fe8",
+  "insns": 2,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82794540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b2ff0",
+  "insns": 23,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82794540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b3510",
+  "insns": 474,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791828",
+  "setter": false,
+  "vd": [
+   "VdGetSystemCommandBuffer",
+   "VdPersistDisplay",
+   "VdSwap"
+  ],
+  "note": "D3DDevice Swap/Present (calls VdSwap, VdGetSystemCommandBuffer, VdPersistDisplay)"
+ },
+ {
+  "addr": "0x826b5790",
+  "insns": 13,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x827918c0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b59b0",
+  "insns": 21,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x827918c0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b5a08",
+  "insns": 242,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791a50",
+  "setter": false,
+  "vd": [
+   "VdEnableRingBufferRPtrWriteBack",
+   "VdInitializeRingBuffer",
+   "VdSetSystemCommandBufferGpuIdentifierAddress"
+  ],
+  "note": "D3D device ring-buffer init (VdInitializeRingBuffer, VdEnableRingBufferRPtrWriteBack)"
+ },
+ {
+  "addr": "0x826b62b0",
+  "insns": 7,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791148",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b62e0",
+  "insns": 7,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827911b0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6310",
+  "insns": 9,
+  "callsites": 23,
+  "callers": 23,
+  "example_caller": "0x8277e6f8",
+  "setter": true,
+  "vd": [],
+  "note": "render-state setter (23 call sites): bit3 of [dev+10556], dirty 0x40200"
+ },
+ {
+  "addr": "0x826b6348",
+  "insns": 32,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790ed8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b63d8",
+  "insns": 31,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827903e0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6468",
+  "insns": 31,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827903e0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b64f8",
+  "insns": 31,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827903e0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6588",
+  "insns": 23,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790368",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b65f8",
+  "insns": 23,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790368",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6668",
+  "insns": 23,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790368",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b66d8",
+  "insns": 33,
+  "callsites": 16,
+  "callers": 16,
+  "example_caller": "0x82790e88",
+  "setter": true,
+  "vd": [],
+  "note": "render-state setter (16 call sites): bit of [dev+12284], derives [dev+10552..10592]"
+ },
+ {
+  "addr": "0x826b6770",
+  "insns": 13,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x827904a0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b67d0",
+  "insns": 7,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x827904a0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6938",
+  "insns": 15,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82790650",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b69d8",
+  "insns": 14,
+  "callsites": 58,
+  "callers": 49,
+  "example_caller": "0x82789800",
+  "setter": true,
+  "vd": [],
+  "note": "render-state setter (58 call sites): [dev+12308], bit1 of [dev+10548], dirty 0x20800"
+ },
+ {
+  "addr": "0x826b6a18",
+  "insns": 7,
+  "callsites": 52,
+  "callers": 45,
+  "example_caller": "0x82789800",
+  "setter": true,
+  "vd": [],
+  "note": "render-state setter (52 call sites): bit2 of [dev+10548], dirty 0x800"
+ },
+ {
+  "addr": "0x826b6a48",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791010",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6a80",
+  "insns": 14,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790768",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6ac0",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790768",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6af8",
+  "insns": 7,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827906a8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6b28",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790708",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6b60",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790708",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6b98",
+  "insns": 7,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790708",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6c98",
+  "insns": 5,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827906a8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6cb8",
+  "insns": 5,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827906a8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6cd8",
+  "insns": 5,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790aa0",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6e80",
+  "insns": 38,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827905d8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6f78",
+  "insns": 14,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82790d60",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6fb8",
+  "insns": 14,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827902e8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b6ff8",
+  "insns": 14,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827902e8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7038",
+  "insns": 14,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x827902e8",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7078",
+  "insns": 2,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82790cb8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7130",
+  "insns": 16,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791928",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7838",
+  "insns": 9,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82796128",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7870",
+  "insns": 7,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82796128",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b79d8",
+  "insns": 7,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x82790238",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7a08",
+  "insns": 21,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x82790238",
+  "setter": true,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7b20",
+  "insns": 2,
+  "callsites": 7,
+  "callers": 6,
+  "example_caller": "0x827917c8",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7b30",
+  "insns": 4,
+  "callsites": 2,
+  "callers": 1,
+  "example_caller": "0x82794540",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7b50",
+  "insns": 50,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82795d80",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7cf8",
+  "insns": 50,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82795d80",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b7f98",
+  "insns": 26,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82795c98",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8578",
+  "insns": 62,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791430",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8670",
+  "insns": 72,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x82791308",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8790",
+  "insns": 36,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x827912b0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8820",
+  "insns": 17,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278e498",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b88a8",
+  "insns": 52,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82796128",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8d98",
+  "insns": 3,
+  "callsites": 7,
+  "callers": 7,
+  "example_caller": "0x82791400",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b8da8",
+  "insns": 32,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278e538",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b9268",
+  "insns": 182,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x8278e440",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826b9540",
+  "insns": 1,
+  "callsites": 2,
+  "callers": 2,
+  "example_caller": "0x8278e498",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826bb0d0",
+  "insns": 19,
+  "callsites": 5,
+  "callers": 5,
+  "example_caller": "0x8278e0a0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826bc398",
+  "insns": 47,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x82791750",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ },
+ {
+  "addr": "0x826bc928",
+  "insns": 261,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278e028",
+  "setter": false,
+  "vd": [],
+  "note": "draw call (emits DRAW_INDX) - DrawVertices/DrawIndexed variant"
+ },
+ {
+  "addr": "0x826bcd40",
+  "insns": 285,
+  "callsites": 1,
+  "callers": 1,
+  "example_caller": "0x8278dfc8",
+  "setter": false,
+  "vd": [],
+  "note": "draw call (emits DRAW_INDX) - DrawVertices/DrawIndexed variant"
+ },
+ {
+  "addr": "0x826cbfb8",
+  "insns": 21,
+  "callsites": 3,
+  "callers": 3,
+  "example_caller": "0x826ddbd0",
+  "setter": false,
+  "vd": [],
+  "note": ""
+ }
+]

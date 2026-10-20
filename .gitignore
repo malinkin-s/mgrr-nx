@@ -1,0 +1,32 @@
+# Whitelist. Only this project's own sources, configs and docs are tracked.
+# NEVER commit game data: extracted ISO/OBB/APK, decrypted images, recompiled C++ (ppc*/),
+# extracted or translated shaders, textures, models, renders of game assets, build outputs.
+/*
+!/.gitignore
+!/.gitmodules
+!/LICENSE
+!/README.md
+!/PLAN.md
+!/NOTES.md
+!/tools/
+!/docs/
+!/game/
+!/sdk
+
+# analysis results that contain only addresses, names and our own notes
+!/x360_work/
+/x360_work/*
+!/x360_work/*.md
+!/x360_work/*.toml
+!/x360_work/runtime_imports.txt
+!/x360_work/d3d_entrypoints.json
+!/x360_work/d3d_setters.json
+!/x360_work/sampler_setters.json
+!/x360_work/x360_vertex_decls.json
+
+__pycache__/
+*.pyc
+*.o
+*.elf
+*.nro
+*.nacp
