@@ -165,3 +165,9 @@ M0.1: git-репозиторий (whitelist .gitignore), LICENSE GPL-3, README, 
 - Сравнение с XenonRecomp (130 715 функций): 44 818 лишних у XenonRecomp — нулевые заполнители; 492 — код, которого анализатор не видит (в основном thunk'и, доступные только через vtable): 472 объявлены (`x360_work/rexglue_extra_functions.txt`), 20 лежат внутри функций ReXGlue и не объявлены (`x360_work/rexglue_inner_entries.txt`, проверить в M1 по «call to unregistered function»).
 - Вложенные границы из нашего списка ReXGlue не принимает: объявляем только старты; 0x82ADBC0C — метка внутри 0x82ADBA90 (исключена, конец 0x82ADBA90 задан вручную).
 - Опции регистров (`*_as_local`) пока выключены: в M1 включать по одной с проверкой (у xbox360-nx ломались `skip_lr` и `non_argument_as_local`).
+
+## M0.3 — сборка и первый запуск на Linux
+- `game/CMakeLists.txt` + `src/main.cpp`, `src/mgrr_app.h` по шаблону `rexglue init`; SDK подключается `-DREXSDK_DIR=<repo>/sdk`. Флаг `-march=x86-64-v3` обязателен (без SSSE3 SDK не компилируется; пресеты SDK ставят v2/v3).
+- Сборка clang 22, Release, `-j5` (15 ГБ RAM): SDK + 267 файлов кода игры за 12 мин, 0 ошибок; `build/linux/mgrr` 168 МБ. Скрипты: `tools/build_from_iso.sh` (распаковка `tools/xdvdfs.py` — побайтно совпадает с x360_extracted, проверка sha256 default.xex, кодоген, сборка), `tools/run_linux.sh` (запуск с `--gpu_plugin=xenos --mnk_mode=true` — клавиатура как геймпад, по умолчанию в SDK выключена; без LD_LIBRARY_PATH не находится librexruntime.so).
+- Без GPU-плагина игра доходит до `VdInitializeRingBuffer` и ждёт. С `--gpu_plugin=xenos` (Xenia, Vulkan, RTX 3050) за 60 с: без падений и «unregistered function», ~90 МБ прочитано из cpk, звук идёт (XMA), создаётся ~40 пайплайнов, swapchain 1920×1080; единственное массовое предупреждение — ~1800 «Texture fetch constant has invalid type» (нулевые fetch-константы). Что на экране — проверить глазами.
+- Проверено глазами: стартовый экран «Press Start», без артефактов, звук нормальный.
