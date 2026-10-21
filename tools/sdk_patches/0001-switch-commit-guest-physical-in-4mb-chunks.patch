@@ -1,0 +1,39 @@
+diff --git i/src/core/memory_switch.cpp w/src/core/memory_switch.cpp
+index da1643f..7d5d20a 100644
+--- i/src/core/memory_switch.cpp
++++ w/src/core/memory_switch.cpp
+@@ -36,6 +36,7 @@
+ 
+ #if REX_PLATFORM_SWITCH
+ 
++#include <algorithm>
+ #include <cstring>
+ #include <filesystem>
+ 
+@@ -151,7 +152,25 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
+     return nullptr;
+   }
+ 
+-  if (!RexGmCommit(offset, length, ToGm(access))) {
++  // Guest physical memory is committed in whole 4 MB chunks, as the fault path does
++  // (exception_handler_switch.cpp, step 3). Every commit is its own kernel mapping,
++  // repeated in each 360 view. MGR's PhysicalHeap allocates 4 KB at a time, and
++  // page-sized commits exhausted the kernel's memory blocks: 0xCE01 at a 448 MB
++  // backing. The heap still decides what is allocated; the extra pages are only
++  // backed, and no wider than a fault would make them.
++  size_t commit_offset = offset;
++  size_t commit_length = length;
++  constexpr size_t kPhysicalBegin = 0x100000000ull;
++  constexpr size_t kPhysicalEnd = 0x120000000ull;
++  constexpr size_t kPhysicalChunk = 0x400000;
++  if (offset >= kPhysicalBegin && offset < kPhysicalEnd) {
++    commit_offset = offset & ~(kPhysicalChunk - 1);
++    const size_t end = std::min<size_t>(
++        (offset + length + kPhysicalChunk - 1) & ~(kPhysicalChunk - 1), kPhysicalEnd);
++    commit_length = end - commit_offset;
++  }
++
++  if (!RexGmCommit(commit_offset, commit_length, ToGm(access))) {
+     // This is the message that fires if Horizon's mapping ceiling is hit, so it
+     // carries everything needed to tell which of the three ran out.
+     // The real ceiling is the process limit on mappable memory

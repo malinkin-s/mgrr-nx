@@ -4,5 +4,5 @@
 #   tools/run_linux.sh [extra rexglue options...]      log: build/run.log
 repo=$(cd "$(dirname "$0")/.." && pwd)
 export LD_LIBRARY_PATH="$repo/sdk/out/linux-amd64:$repo/build/linux${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec "$repo/build/linux/mgrr" --game_data_root="$repo/x360_extracted" --gpu_plugin=xenos --mnk_mode=true \
+exec "$repo/build/linux/mgrr" --game_data_root="$repo/x360_extracted" --gpu_plugin=xenos --mnk_mode=true --mgrr_draw_stats=true \
      --log_file="$repo/build/run.log" "$@"

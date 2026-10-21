@@ -25,6 +25,12 @@ if [ "$sum" != "$XEX_SHA256" ]; then
 fi
 
 sdk=$repo/sdk
+# Our fixes to the SDK (rexglue-sdk-nx), kept as patches until they are upstream.
+for p in "$repo"/tools/sdk_patches/*.patch; do
+  if git -C "$sdk" apply --reverse --check "$p" 2>/dev/null; then continue; fi  # already applied
+  echo "== patching sdk: $(basename "$p")"
+  git -C "$sdk" apply "$p"
+done
 rexglue=$sdk/out/linux-amd64/Release/rexglue
 if [ ! -x "$rexglue" ]; then
   echo "== building the ReXGlue host tools"

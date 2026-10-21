@@ -8,6 +8,12 @@ game_root = "../x360_extracted"
 [entrypoint]
 file_path = "../x360_extracted/default.xex"
 out_directory_path = "generated/default"
+# mfmsr/mtmsrd (the 360's "interrupts off" around lwarx/stwcx.) are not emitted: by default they
+# take the SDK's global recursive mutex. In MGR all 542 such regions hold only one lwarx/stwcx.
+# atomic (add, CAS, swap, and), and stwcx. is already a host CAS, so the lock adds nothing. On
+# Switch it was the main contention: on average ~1.8 threads were blocked on it
+# in the bump allocator 0x82791B20 (title screen, NOTES.md M1). UnleashedRecomp sets it too.
+skip_msr = true
 
 # Our own analysis (tools/to_rexglue.py), then hand-written findings (overrides.toml, applied last).
 includes = ["analysis_functions.toml", "analysis_switch_tables.toml", "overrides.toml"]
