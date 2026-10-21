@@ -36,12 +36,13 @@ The recompiled C++, the translated shaders and every game file stay local and ar
 ## Status
 
 **The game is not playable yet.** On a Switch it boots, plays sound, answers the controller and runs its logic,
-including gameplay, but the screen is black: the renderer is being built now.
+including gameplay. The native renderer already draws the 2D interface (menus, text, HUD); 3D scenes are not
+drawn yet.
 
 | Milestone | Goal | State |
 | :--- | :--- | :--- |
 | **M0 Foundation** | Recompilation project, Linux and Switch builds from the disc image | ✅ done |
-| **M1 Boot** | The game runs on PC and on the Switch | ✅ done: PC shows the title screen (reference GPU emulation); the Switch runs without a picture |
+| **M1 Boot** | The game runs on PC and on the Switch | ✅ done: PC shows the title screen (reference GPU emulation) |
 | **M2 Graphics** | Native deko3d renderer: main menu and the start of R-00 match the Xbox 360 | 🔧 in progress |
 | **M3 Vertical slice** | Input, audio, cutscenes, saves: the prologue R-00 playable from start to end | planned |
 | **M4 60 FPS** | Profiling and optimization: R-00 at 60 FPS on an overclocked Erista Switch | planned |
@@ -67,8 +68,13 @@ every measurement: [NOTES.md](NOTES.md).
   shader binary); 1482 make it, including every shader the title screen uses.
 - Shader identification: pixel shaders by their microcode (88 of 88 on the title screen), vertex shaders through
   a hook on the game's shader creation (every shader the game creates is found, except the 10 untranslated ones).
-- Next: the GPU ring decoder that turns each of the game's draws into a request for the renderer, then the first
-  frame of the main menu.
+- GPU ring decoder: each of the game's draws becomes a request to the deko3d renderer. The 2D interface is drawn
+  on the console, complete and without artifacts.
+- Vertex formats: packed 10:11:11 normals are decoded in the shaders.
+- Graphics test bench (in progress): frames recorded on PC are replayed on the Switch renderer, on the console and
+  in an emulator, and compared with the reference image. The console stays the target; the emulator only filters
+  out errors before a console run.
+- Next: 3D scenes of the main menu and of R-00.
 
 ---
 
@@ -128,18 +134,27 @@ sdmc:/switch/mgrr/
 
 Logs go to `sdmc:/switch/mgrr/logs/`.
 
+### Debugging
+
+- `tools/nxlink.sh [SWITCH_IP]` sends the build over the network (hbmenu: press **Y**) and receives its log on the PC,
+  in English, together with screenshots (every 30 s and on **L+R+Minus**): `build/nxlink_logs/<time>/`.
+- `--gpu_trace_path=FILE --gpu_trace_start=N --gpu_trace_frames=K` on the PC build records K frames of GPU commands
+  and the memory they read, from frame N; `python3 -I tools/gputrace.py FILE` summarizes a recording.
+
 ---
 
 ## Repository layout
 
 ```text
 mgrr-nx/
-├── game/                 # the port: ReXGlue manifest, our analysis of the executable, hooks, GPU ring reader
+├── game/                 # the port: ReXGlue manifest, hooks, GPU ring reader and PM4 decoder
 │   └── src/
 ├── tools/
 │   ├── build_from_iso.sh # disc image → recompiled C++ → Linux build
 │   ├── shaders/          # shader library pipeline (translator, packer, DKSH probe)
 │   ├── switch_build/     # Switch toolchain file and the clang build of the game code
+│   ├── nxlink.sh         # network launch with the log and screenshots sent back
+│   ├── gputrace.py       # summary of a GPU recording
 │   └── sdk_patches/      # our fixes to rexglue-sdk-nx until they are upstream
 ├── x360_work/            # reverse-engineering notes: D3D, formats, rendering (addresses and our notes only)
 ├── sdk/                  # rexglue-sdk-nx (submodule)
