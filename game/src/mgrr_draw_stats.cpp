@@ -21,6 +21,9 @@
 #include <rex/hook.h>
 #include <rex/logging.h>
 
+#include "mgrr_shader_hooks.h"
+#include "mgrr_stats.h"
+
 #if MGRR_DEKO3D
 #define MGRR_DRAW_STATS_DEFAULT true   // Switch test builds: the log is the only output for now
 #else
@@ -55,6 +58,15 @@ uint32_t Primitives(uint32_t type, uint32_t count) {
   }
 }
 
+// The overlay's numbers (mgrr_stats.h): the last full second, independent of the log window.
+struct Second {
+  std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point last_swap = start;
+  uint64_t frames = 0, draws = 0, resolves = 0;
+  double max_ms = 0;
+} g_second;
+mgrr::stats::Frames g_frames;  // under g_win.lock
+
 uint32_t Percentile(std::vector<uint32_t>& v, double p) {
   size_t i = size_t(p * double(v.size() - 1) + 0.5);
   std::nth_element(v.begin(), v.begin() + i, v.end());
@@ -67,13 +79,36 @@ void EndFrame() {
   const uint32_t prims = g_prims.exchange(0, std::memory_order_relaxed);
   const uint32_t resolves = g_resolves.exchange(0, std::memory_order_relaxed);
   std::lock_guard<std::mutex> guard(g_win.lock);
+  const auto now = std::chrono::steady_clock::now();
+  {
+    Second& sec = g_second;
+    sec.max_ms = std::max(sec.max_ms, std::chrono::duration<double, std::milli>(now - sec.last_swap).count());
+    sec.last_swap = now;
+    ++sec.frames;
+    sec.draws += draws;
+    sec.resolves += resolves;
+    const double secs = std::chrono::duration<double>(now - sec.start).count();
+    if (secs >= 1.0) {
+      g_frames.fps = double(sec.frames) / secs;
+      g_frames.frame_ms = 1000.0 * secs / double(sec.frames);
+      g_frames.frame_ms_max = sec.max_ms;
+      g_frames.draws_per_frame = double(sec.draws) / double(sec.frames);
+      g_frames.resolves_per_frame = double(sec.resolves) / double(sec.frames);
+      sec = Second{now, now};
+    }
+    g_frames.total_frames = g_win.total_frames + 1;
+  }
+  mgrr::shaders::OnFrameForTrace(g_win.total_frames);
+  if (!REXCVAR_GET(mgrr_draw_stats)) {
+    g_win.total_frames++;
+    return;
+  }
   g_win.draws.push_back(draws);
   g_win.indexed += indexed;
   g_win.prims += prims;
   g_win.resolves += resolves;
   g_win.total_frames++;
   g_win.max_ever = std::max(g_win.max_ever, draws);
-  const auto now = std::chrono::steady_clock::now();
   const double secs = std::chrono::duration<double>(now - g_win.start).count();
   if (secs < double(std::max(1, REXCVAR_GET(mgrr_draw_stats_seconds))))
     return;
@@ -96,31 +131,32 @@ void EndFrame() {
 
 }  // namespace
 
+mgrr::stats::Frames mgrr::stats::CurrentFrames() {
+  std::lock_guard<std::mutex> guard(g_win.lock);
+  return g_frames;
+}
+
+// The counters run always (one relaxed atomic add per call, for the overlay); --mgrr_draw_stats only turns on the
+// periodic [draws] log line.
 REX_HOOK_RAW(sub_826BC928) {
-  if (REXCVAR_GET(mgrr_draw_stats)) {
-    g_draws.fetch_add(1, std::memory_order_relaxed);
-    g_prims.fetch_add(Primitives(ctx.r4.u32, ctx.r6.u32), std::memory_order_relaxed);
-  }
+  g_draws.fetch_add(1, std::memory_order_relaxed);
+  g_prims.fetch_add(Primitives(ctx.r4.u32, ctx.r6.u32), std::memory_order_relaxed);
   __imp__sub_826BC928(ctx, base);
 }
 
 REX_HOOK_RAW(sub_826BCD40) {
-  if (REXCVAR_GET(mgrr_draw_stats)) {
-    g_draws.fetch_add(1, std::memory_order_relaxed);
-    g_indexed.fetch_add(1, std::memory_order_relaxed);
-    g_prims.fetch_add(Primitives(ctx.r4.u32, ctx.r7.u32), std::memory_order_relaxed);
-  }
+  g_draws.fetch_add(1, std::memory_order_relaxed);
+  g_indexed.fetch_add(1, std::memory_order_relaxed);
+  g_prims.fetch_add(Primitives(ctx.r4.u32, ctx.r7.u32), std::memory_order_relaxed);
   __imp__sub_826BCD40(ctx, base);
 }
 
 REX_HOOK_RAW(sub_826BB0D0) {
-  if (REXCVAR_GET(mgrr_draw_stats))
-    g_resolves.fetch_add(1, std::memory_order_relaxed);
+  g_resolves.fetch_add(1, std::memory_order_relaxed);
   __imp__sub_826BB0D0(ctx, base);
 }
 
 REX_HOOK_RAW(sub_826B3510) {
-  if (REXCVAR_GET(mgrr_draw_stats))
-    EndFrame();
+  EndFrame();
   __imp__sub_826B3510(ctx, base);
 }

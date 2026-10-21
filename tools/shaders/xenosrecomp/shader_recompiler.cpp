@@ -220,6 +220,16 @@ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t a
         specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
         print("tfetchR11G11B10(");
         break;
+#elif defined(MGRR_PACKED_NORMALS)
+    // MGR packs normals as k_10_11_11 (vertex format 16; all 36 NORMAL elements, x360_work/VERTEX_FORMATS.md). Still
+    // float4 inputs, as NFSMW's: for that format the renderer fetches the raw 32 bits (1x32 Uint) and sets
+    // SPEC_CONSTANT_R11G11B10_NORMAL, and asuint gets the bits back; for any other format the bit is clear and
+    // tfetchR11G11B10 gives the value unchanged (asfloat(asuint)). Normals only: the bit is per shader, and MGR's
+    // tangents are UBYTE4N, which the decode would break.
+    case DeclUsage::Normal:
+        specConstantsMask |= SPEC_CONSTANT_R11G11B10_NORMAL;
+        print("tfetchR11G11B10(asuint(");
+        break;
 #endif
 
     case DeclUsage::TexCoord:
@@ -236,6 +246,10 @@ void ShaderRecompiler::recompile(const VertexFetchInstruction& instr, uint32_t a
     case DeclUsage::Tangent:
     case DeclUsage::Binormal:
         out += ')';
+        break;
+#elif defined(MGRR_PACKED_NORMALS)
+    case DeclUsage::Normal:
+        out += "))";
         break;
 #endif
 

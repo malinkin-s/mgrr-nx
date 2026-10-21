@@ -44,6 +44,9 @@ class Shaders {
   // nullptr if none. Any thread, once loaded.
   const rex::x360::EntradaShader* Identify(bool vertex, std::span<const uint32_t> microcode);
 
+  // The entry of a container by its hash (EntradaShader::huella_contenedor), or nullptr: a recording's shader table.
+  const rex::x360::EntradaShader* FindContainerHash(uint64_t hash) const;
+
   // The library name of an entry ("shader.deferredcomposition"), for reports.
   const char* Name(const rex::x360::EntradaShader& entry) const;
 

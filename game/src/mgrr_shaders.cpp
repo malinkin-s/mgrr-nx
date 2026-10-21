@@ -198,6 +198,13 @@ bool Shaders::Load(const std::filesystem::path& path) {
   return d.loaded;
 }
 
+const EntradaShader* Shaders::FindContainerHash(uint64_t hash) const {
+  const Data& d = *data_;
+  if (!d.loaded) return nullptr;
+  const auto it = d.by_container.find(hash);
+  return it != d.by_container.end() ? &d.entries[it->second] : nullptr;
+}
+
 const EntradaShader* Shaders::FindContainer(std::span<const uint8_t> container) {
   Data& d = *data_;
   if (!d.loaded) return nullptr;

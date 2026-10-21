@@ -1,0 +1,39 @@
+diff --git a/src/ui/windowed_app_main_switch.cpp b/src/ui/windowed_app_main_switch.cpp
+index 4f79067..60630e9 100644
+--- a/src/ui/windowed_app_main_switch.cpp
++++ b/src/ui/windowed_app_main_switch.cpp
+@@ -25,6 +25,16 @@ extern "C" {
+ // libnx runtime internals used for the exit below.
+ extern u32 __nx_applet_exit_mode;
+ NX_NORETURN void __libnx_exit(int rc);
++// The launch arguments as libnx parsed them (filesystem_posix.cpp reads the NRO path from argv[0]).
++extern int __system_argc;
++extern char** __system_argv;
++}
++
++// The NRO path to assume when the loader passes none. hbloader and nxlink give argv[0] = "sdmc:/switch/x/x.nro";
++// Ryujinx starts homebrew with no arguments at all, and cvar::Init and GetExecutableFolder need one. A title
++// defines it (strong symbol) to name its folder; nullptr keeps argv as it came.
++__attribute__((weak)) const char* RexSwitchDefaultExecutablePath() {
++  return nullptr;
+ }
+ 
+ namespace {
+@@ -58,6 +68,17 @@ namespace {
+ }  // namespace
+ 
+ int main(int argc, char* argv[]) {
++  static char kEmpty[] = "";
++  static char* fallback_argv[2] = {kEmpty, nullptr};
++  if (argc < 1 || !argv || !argv[0] || !argv[0][0]) {
++    if (const char* path = RexSwitchDefaultExecutablePath()) {
++      fallback_argv[0] = const_cast<char*>(path);
++    }
++    argc = 1;
++    argv = fallback_argv;
++    __system_argc = 1;
++    __system_argv = fallback_argv;
++  }
+   auto remaining = rex::cvar::Init(argc, argv);
+   rex::cvar::ApplyEnvironment();
+   rex::InitLoggingEarly();

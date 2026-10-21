@@ -1,0 +1,1901 @@
+diff --git a/src/audio/sdl/sdl_audio_driver.cpp b/src/audio/sdl/sdl_audio_driver.cpp
+index 9a5ec12..c89c512 100644
+--- a/src/audio/sdl/sdl_audio_driver.cpp
++++ b/src/audio/sdl/sdl_audio_driver.cpp
+@@ -93,7 +93,7 @@ void GrabarSalida(const float* datos, int bytes, uint32_t canales) {
+     fichero.write("data", 4);
+     u32(bytes_datos);
+     fichero.write(reinterpret_cast<const char*>(volcado_salida.muestras.data()), bytes_datos);
+-    REXAPU_INFO("[audio] volcado de la salida SDL: {} muestras por canal, {} canales, en {}",
++    REXAPU_INFO("[audio] SDL output dump: {} samples per channel, {} channels, in {}",
+                 volcado_salida.muestras.size() / canales, canales, ruta.string());
+   }
+   volcado_salida.muestras = std::vector<float>();
+@@ -106,7 +106,7 @@ void ContarTrama(bool silencio) {
+     return;
+   }
+   if (ultimo_informe_salida.time_since_epoch().count() != 0) {
+-    REXAPU_INFO("[audio] SDL en 10 s: {} tramas con datos y {} de silencio por falta de tramas",
++    REXAPU_INFO("[audio] SDL in 10 s: {} frames with data and {} of silence for lack of frames",
+                 tramas_con_datos, tramas_de_silencio);
+   }
+   tramas_con_datos = 0;
+@@ -201,7 +201,7 @@ bool SDLAudioDriver::Initialize() {
+   if (REXCVAR_GET(audio_sdl_bomba)) {
+     bomba_activa_ = true;
+     bomba_ = std::thread([this]() { Bomba(); });
+-    REXAPU_INFO("audio: bomba de diagnostico a 187,5 Hz activa");
++    REXAPU_INFO("audio: 187.5 Hz diagnostic pump on");
+   }
+ 
+   return true;
+diff --git a/src/audio/switch/switch_audio_system.cpp b/src/audio/switch/switch_audio_system.cpp
+index 6a9dc8d..8724e83 100644
+--- a/src/audio/switch/switch_audio_system.cpp
++++ b/src/audio/switch/switch_audio_system.cpp
+@@ -203,7 +203,7 @@ bool SwitchAudioSystem::StartOutput() {
+   auto output = std::make_unique<Output>();
+   output->pump = REXCVAR_GET(audio_switch_bomba);
+   output->tramas_en_cola = static_cast<size_t>(std::clamp(REXCVAR_GET(audio_switch_tramas_en_cola), 2, 32));
+-  REXLOG_INFO("SwitchAudioSystem: bomba de 187,5 Hz {}, {} tramas en cola", output->pump ? "activa" : "apagada",
++  REXLOG_INFO("SwitchAudioSystem: 187.5 Hz pump {}, {} frames queued", output->pump ? "on" : "off",
+               output->tramas_en_cola);
+ 
+   Result rc = audoutInitialize();
+diff --git a/src/audio/xma_context.cpp b/src/audio/xma_context.cpp
+index a902d01..a6e5d84 100644
+--- a/src/audio/xma_context.cpp
++++ b/src/audio/xma_context.cpp
+@@ -113,7 +113,7 @@ void EscribirVolcadoXmaEnHilo(uint32_t contexto, int tipo, const VolcadoXma& v)
+   fichero.write("data", 4);
+   u32(bytes);
+   fichero.write(reinterpret_cast<const char*>(v.muestras.data()), bytes);
+-  REXAPU_INFO("XMA: volcado {} del contexto {}: {} muestras a {} Hz, {} canales",
++  REXAPU_INFO("XMA: dump {} of context {}: {} samples at {} Hz, {} channels",
+               tipo ? "de salida" : "de tramas", contexto, v.muestras.size() / v.canales,
+               v.frecuencia, v.canales);
+ }
+@@ -215,7 +215,7 @@ void VolcarXma(uint32_t contexto, int tipo, uint32_t frecuencia, uint32_t canale
+   }
+   if (v.muestras.empty() && tipo == 0 && anotados_xma < 64) {
+     ++anotados_xma;
+-    REXAPU_INFO("XMA: contexto {} con audio a {} Hz, {} canales", contexto, frecuencia, canales);
++    REXAPU_INFO("XMA: context {} with audio at {} Hz, {} channels", contexto, frecuencia, canales);
+   }
+   if (v.muestras.empty()) {
+     v.secuencia = ++secuencia_volcados_xma;
+@@ -359,8 +359,8 @@ void XmaContext::AnotarProduccion(bool produjo, uint8_t motivo, const XMA_CONTEX
+   en_silencio_ = false;
+   const double ms = std::chrono::duration<double, std::milli>(ahora - silencio_desde_).count();
+   if (ms >= 50.0 && lineas.fetch_add(1, std::memory_order_relaxed) < 200) {
+-    REXLOG_INFO("[xma] silencio: el contexto {} estuvo {:.0f} ms sin producir y vuelve a sonar ({} pasadas vacias, "
+-                "ultimo motivo {}: 1 solo vaciar, 2 sin entrada, 3 sin avance, 4 error; entradas {}{}, bufer actual {}, "
++    REXLOG_INFO("[xma] silence: context {} produced nothing for {:.0f} ms and plays again ({} empty passes, "
++                "last reason {}: 1 drain only, 2 no input, 3 no progress, 4 error; inputs {}{}, current buffer {}, "
+                 "bucles {})",
+                 id_, ms, silencio_pasadas_, silencio_motivo_, uint32_t(data.input_buffer_0_valid),
+                 uint32_t(data.input_buffer_1_valid), uint32_t(data.current_buffer), uint32_t(data.loop_count));
+diff --git a/src/audio/xma_decoder.cpp b/src/audio/xma_decoder.cpp
+index 3a1bebb..d9c4ef2 100644
+--- a/src/audio/xma_decoder.cpp
++++ b/src/audio/xma_decoder.cpp
+@@ -121,7 +121,7 @@ X_STATUS XmaDecoder::Setup(system::KernelState* kernel_state) {
+   // MDCT, float_dsp) be chosen without SIMD.
+   if (!REXCVAR_GET(audio_ffmpeg_simd)) {
+     av_force_cpu_flags(0);
+-    REXAPU_INFO("XMA: FFmpeg sin SIMD (audio_ffmpeg_simd = false)");
++    REXAPU_INFO("XMA: FFmpeg without SIMD (audio_ffmpeg_simd = false)");
+   }
+ 
+   // Register APU/XMA MMIO handlers
+@@ -279,12 +279,12 @@ void InformarXma() {
+   const uint64_t latencia_ns = g_medida_xma.latencia_ns.exchange(0, std::memory_order_relaxed);
+   const uint64_t latencia_max = g_medida_xma.latencia_max_ns.exchange(0, std::memory_order_relaxed);
+   const uint64_t latencia_n = g_medida_xma.latencia_n.exchange(0, std::memory_order_relaxed);
+-  REXLOG_INFO("[xma] en el hilo que llama, {:.1f} s: kicks {} con {} contextos descodificados, {:.1f} ms (maximo "
+-              "{:.2f} ms); locks {} con {} contextos, {:.1f} ms esperando (maximo {:.2f} ms)",
++  REXLOG_INFO("[xma] on the calling thread, {:.1f} s: kicks {} with {} contexts decoded, {:.1f} ms (max "
++              "{:.2f} ms); locks {} with {} contexts, {:.1f} ms waiting (max {:.2f} ms)",
+               double(ahora - ultimo) / 1000.0, kicks, kick_contextos, double(kick_ns) / 1e6, double(kick_max) / 1e6,
+               locks, lock_contextos, double(lock_ns) / 1e6, double(lock_max) / 1e6);
+-  REXLOG_INFO("[xma] reparto (modo {}): trabajador {} contextos en {:.1f} ms (maximo {:.2f} ms), respaldo del hilo "
+-              "del kick {}; del kick al dato listo media {:.0f} us y maxima {:.2f} ms ({} medidas)",
++  REXLOG_INFO("[xma] dispatch (mode {}): worker {} contexts in {:.1f} ms (max {:.2f} ms), fallback on the thread "
++              "of the kick {}; kick to data ready mean {:.0f} us and max {:.2f} ms ({} samples)",
+               REXCVAR_GET(audio_xma_en_trabajador), del_trabajador, double(trabajo_ns) / 1e6,
+               double(trabajo_max) / 1e6, del_respaldo,
+               latencia_n ? double(latencia_ns) / double(latencia_n) / 1e3 : 0.0, double(latencia_max) / 1e6,
+diff --git a/src/core/mapped_memory_switch.cpp b/src/core/mapped_memory_switch.cpp
+index 8055b40..b08d8c8 100644
+--- a/src/core/mapped_memory_switch.cpp
++++ b/src/core/mapped_memory_switch.cpp
+@@ -129,9 +129,9 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(const std::filesystem::path& pa
+   }
+ 
+   if (len > kMaxInMemoryFile) {
+-    REXLOG_ERROR("MappedMemory: '{}' pide {} MB y en Switch no hay mmap de ficheros, asi que "
+-                 "habria que leerlo entero a RAM. Si es la ISO del juego, usa los ficheros "
+-                 "EXTRAIDOS (carpeta game_root) en su lugar.",
++    REXLOG_ERROR("MappedMemory: '{}' asks for {} MB and Switch has no file mmap, so "
++                 "it would have to be read whole into RAM. If it is the game ISO, use the "
++                 "EXTRACTED files (game_root folder) instead.",
+                  ruta, len >> 20);
+     fclose(f);
+     return nullptr;
+@@ -140,7 +140,7 @@ std::unique_ptr<MappedMemory> MappedMemory::Open(const std::filesystem::path& pa
+   const size_t reservado = (len + kPage - 1) & ~(kPage - 1);
+   uint8_t* datos = static_cast<uint8_t*>(memalign(kPage, reservado));
+   if (!datos) {
+-    REXLOG_ERROR("MappedMemory: sin memoria para leer '{}' ({} MB)", ruta, len >> 20);
++    REXLOG_ERROR("MappedMemory: out of memory reading '{}' ({} MB)", ruta, len >> 20);
+     fclose(f);
+     return nullptr;
+   }
+diff --git a/src/core/memory_switch.cpp b/src/core/memory_switch.cpp
+index 7d5d20a..3be0c35 100644
+--- a/src/core/memory_switch.cpp
++++ b/src/core/memory_switch.cpp
+@@ -133,7 +133,7 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
+   }
+ 
+   if (!InWindow(base_address, length)) {
+-    REXLOG_ERROR("AllocFixed en Switch fuera de la ventana del invitado: 0x{:016X} (0x{:X} bytes). "
++    REXLOG_ERROR("AllocFixed on Switch outside the guest window: 0x{:016X} (0x{:X} bytes). "
+                  "Horizon no permite fijar direcciones arbitrarias.",
+                  reinterpret_cast<uintptr_t>(base_address), length);
+     return nullptr;
+@@ -147,7 +147,7 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
+ 
+   size_t offset = 0;
+   if (!RexGmWindowToOffset(reinterpret_cast<uint64_t>(base_address), &offset)) {
+-    REXLOG_ERROR("AllocFixed: 0x{:016X} no pertenece a ninguna vista del invitado",
++    REXLOG_ERROR("AllocFixed: 0x{:016X} belongs to no guest view",
+                  reinterpret_cast<uintptr_t>(base_address));
+     return nullptr;
+   }
+@@ -178,8 +178,8 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
+     // once more per 360 view. The limit figures come from the profiler
+     // (switch_perf.cpp); switch.h cannot be included here without clashing with
+     // the SDK types.
+-    REXLOG_ERROR("AllocFixed: no se pudo confirmar 0x{:X} bytes en 0x{:016X}. Fallo 0x{:08X}; "
+-                 "respaldo {} MB, mapeado {} MB contando espejos.",
++    REXLOG_ERROR("AllocFixed: could not commit 0x{:X} bytes at 0x{:016X}. Error 0x{:08X}; "
++                 "backing {} MB, mapped {} MB counting mirrors.",
+                  length, reinterpret_cast<uintptr_t>(base_address), RexGmLastResult(),
+                  RexGmCommittedBytes() >> 20, RexGmMappedBytes() >> 20);
+     return nullptr;
+@@ -189,8 +189,8 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
+   // the requested permission is applied on top. In the common case (read-write on
+   // an unprotected range) this returns immediately.
+   if (!RexGmProtect(static_cast<uint8_t*>(base_address), length, ToGm(access), nullptr)) {
+-    REXLOG_ERROR("AllocFixed: confirmado pero no se pudo aplicar el permiso en 0x{:016X} "
+-                 "(fallo 0x{:08X})",
++    REXLOG_ERROR("AllocFixed: committed but could not apply the permission at 0x{:016X} "
++                 "(error 0x{:08X})",
+                  reinterpret_cast<uintptr_t>(base_address), RexGmLastResult());
+     return nullptr;
+   }
+@@ -232,7 +232,7 @@ bool Protect(void* base_address, size_t length, PageAccess access, PageAccess* o
+     *out_old_access = PageAccess::kNoAccess;
+   }
+   if (!InWindow(base_address, length)) {
+-    REXLOG_ERROR("Protect en Switch fuera de la ventana del invitado: 0x{:016X} (0x{:X} bytes)",
++    REXLOG_ERROR("Protect on Switch outside the guest window: 0x{:016X} (0x{:X} bytes)",
+                  reinterpret_cast<uintptr_t>(base_address), length);
+     return false;
+   }
+@@ -243,7 +243,7 @@ bool Protect(void* base_address, size_t length, PageAccess access, PageAccess* o
+     *out_old_access = FromGm(old);
+   }
+   if (!ok) {
+-    REXLOG_ERROR("Protect: fallo 0x{:08X} en 0x{:016X} (0x{:X} bytes)", RexGmLastResult(),
++    REXLOG_ERROR("Protect: error 0x{:08X} at 0x{:016X} (0x{:X} bytes)", RexGmLastResult(),
+                  reinterpret_cast<uintptr_t>(base_address), length);
+   }
+   return ok;
+@@ -278,8 +278,8 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, siz
+   // window of the guest memory core, and it is reserved here, empty. Real memory
+   // arrives with AllocFixed(kCommit).
+   if (!RexGmBase() && !RexGmInit(AlignUp(length))) {
+-    REXLOG_ERROR("No se pudo reservar la ventana del invitado de 0x{:X} bytes. "
+-                 "Hace falta title takeover: en modo applet no hay espacio.",
++    REXLOG_ERROR("Could not reserve the guest window of 0x{:X} bytes. "
++                 "Title takeover is needed: applet mode has no room.",
+                  length);
+     return kFileMappingHandleInvalid;
+   }
+@@ -303,8 +303,8 @@ void* MapFileView(FileMappingHandle handle, void* base_address, size_t length, P
+     return nullptr;
+   }
+   if (!RexGmAddView(static_cast<uint8_t*>(base_address), file_offset, length)) {
+-    REXLOG_ERROR("MapFileView: no se pudo registrar la vista 0x{:016X} (0x{:X} bytes desde 0x{:X}); "
+-                 "fallo 0x{:08X}",
++    REXLOG_ERROR("MapFileView: could not register the view 0x{:016X} (0x{:X} bytes from 0x{:X}); "
++                 "error 0x{:08X}",
+                  reinterpret_cast<uintptr_t>(base_address), length, file_offset,
+                  RexGmLastResult());
+     return nullptr;
+diff --git a/src/filesystem/devices/host_path_device.cpp b/src/filesystem/devices/host_path_device.cpp
+index 9fdd2f3..8ad0878 100644
+--- a/src/filesystem/devices/host_path_device.cpp
++++ b/src/filesystem/devices/host_path_device.cpp
+@@ -78,10 +78,10 @@ bool HostPathDevice::Initialize() {
+   PopulateEntry(root_entry);
+   const double ms =
+       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - antes).count();
+-  REXFS_INFO("[io] montado '{}' en {}: {} entradas en {:.1f} ms ({})",
++  REXFS_INFO("[io] mounted '{}' at {}: {} entries in {:.1f} ms ({})",
+              rex::path_to_utf8(host_path_), mount_path_,
+              g_entradas_en_arbol.load(std::memory_order_relaxed) - entradas_antes, ms,
+-             read_only_ ? "solo lectura" : "escritura");
++             read_only_ ? "read-only" : "read-write");
+ 
+   return true;
+ }
+diff --git a/src/filesystem/devices/host_path_file.cpp b/src/filesystem/devices/host_path_file.cpp
+index 15e12ce..bfe0ae0 100644
+--- a/src/filesystem/devices/host_path_file.cpp
++++ b/src/filesystem/devices/host_path_file.cpp
+@@ -329,8 +329,8 @@ bool LeerConCache(FileHandle* fh, uint32_t id, std::span<uint8_t> buffer, size_t
+         g_cache.clear();
+         g_cache_lru.clear();
+         g_cache_bytes = 0;
+-        REXLOG_WARN("[io] cache en RAM: sin memoria, se apaga (iba por {} MB). El juego sigue leyendo "
+-                    "del disco como antes",
++        REXLOG_WARN("[io] RAM cache: out of memory, turning off (was at {} MB). The game keeps reading "
++                    "from disk as before",
+                     tenia);
+         return false;
+       }
+@@ -360,8 +360,8 @@ bool LeerConCache(FileHandle* fh, uint32_t id, std::span<uint8_t> buffer, size_t
+   const uint64_t vueltas = g_cache_aciertos + g_cache_fallos;
+   if (vueltas >= g_cache_informe + 200) {
+     g_cache_informe = vueltas;
+-    REXLOG_INFO("[io] cache en RAM: {} bloques ({} MB de {}), {} servidas de RAM y {} del disco "
+-                "({:.1f} % de aciertos); {:.1f} MB entregados, {:.1f} leidos de la SD, {} bloques "
++    REXLOG_INFO("[io] RAM cache: {} blocks ({} MB of {}), {} served from RAM and {} from disk "
++                "({:.1f} % hits); {:.1f} MB delivered, {:.1f} read from SD, {} blocks "
+                 "expulsados",
+                 g_cache.size(), g_cache_bytes >> 20, REXCVAR_GET(nfsmw_io_cache_mb), g_cache_aciertos,
+                 g_cache_fallos, vueltas ? 100.0 * double(g_cache_aciertos) / double(vueltas) : 0.0,
+@@ -523,8 +523,8 @@ void GuardarRango(uint32_t id, uint64_t desplazamiento, uint32_t pedido, const u
+     }
+     g_rangos_entradas.store(0, std::memory_order_relaxed);
+     g_rangos_bytes_vivos.store(0, std::memory_order_relaxed);
+-    REXLOG_WARN("[io] rangos-cache: sin memoria, se apaga (iba por {} MB). El juego sigue leyendo "
+-                "del disco como antes",
++    REXLOG_WARN("[io] range cache: out of memory, turning off (was at {} MB). The game keeps reading "
++                "from disk as before",
+                 tenia);
+     return;
+   }
+diff --git a/src/input/switch/switch_input_driver.cpp b/src/input/switch/switch_input_driver.cpp
+index ccf5e2a..a6c3186 100644
+--- a/src/input/switch/switch_input_driver.cpp
++++ b/src/input/switch/switch_input_driver.cpp
+@@ -396,7 +396,7 @@ void SwitchInputDriver::DispatchMenuShortcuts(Slot& slot, uint64_t held) {
+       if (!ventana || !ventana->app_context().CallInUIThread(pulsar)) {
+         pulsar();
+       }
+-      REXLOG_INFO("atajo de menu: {}", rex::ui::VirtualKeyToString(vk));
++      REXLOG_INFO("menu shortcut: {}", rex::ui::VirtualKeyToString(vk));
+     }
+     slot.menu_shortcuts = ahora ? (slot.menu_shortcuts | bit) : (slot.menu_shortcuts & ~bit);
+   }
+@@ -411,7 +411,7 @@ void SwitchInputDriver::DispatchMenuShortcuts(Slot& slot, uint64_t held) {
+   const bool ab_antes = (slot.menu_shortcuts & kBitAb) != 0;
+   if (ab_ahora && !ab_antes) {
+     RexSwitchPerfToggleAb();
+-    REXLOG_INFO("atajo de menu: pruebas A/B de GPU");
++    REXLOG_INFO("menu shortcut: GPU A/B tests");
+   }
+   slot.menu_shortcuts = ab_ahora ? (slot.menu_shortcuts | kBitAb)
+                                  : (slot.menu_shortcuts & ~kBitAb);
+diff --git a/src/kernel/xam/apps/xmp_app.cpp b/src/kernel/xam/apps/xmp_app.cpp
+index b4075fe..23c2851 100644
+--- a/src/kernel/xam/apps/xmp_app.cpp
++++ b/src/kernel/xam/apps/xmp_app.cpp
+@@ -401,7 +401,7 @@ X_HRESULT XmpApp::DispatchMessageSync(uint32_t message, uint32_t buffer_ptr,
+       // has control unless the system player is the one playing.
+       const bool title_has_control =
+           playback_client_ == PlaybackClient::kTitle || state_ != State::kPlaying;
+-      REXKRNL_INFO("[xmp] XMPSetPlaybackController({}, {}, {}) -> el titulo controla la musica: {}",
++      REXKRNL_INFO("[xmp] XMPSetPlaybackController({}, {}, {}) -> the title controls the music: {}",
+                    uint32_t(args->xmp_client), uint32_t(args->controller),
+                    uint32_t(args->playback_client), title_has_control ? 1 : 0);
+       kernel_state_->BroadcastNotification(kMsgPlaybackControllerChanged,
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_audio.cpp b/src/kernel/xboxkrnl/xboxkrnl_audio.cpp
+index 5cfbb36..0c41e68 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_audio.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_audio.cpp
+@@ -112,7 +112,7 @@ void EscribirVolcado(uint32_t cliente, std::vector<float> muestras) {
+                       ("audio_volcado_" + std::to_string(cliente) + ".wav");
+     std::ofstream fichero(ruta, std::ios::binary | std::ios::trunc);
+     if (!fichero) {
+-      REXKRNL_WARN("[audio] no se pudo crear el volcado {}", ruta.string());
++      REXKRNL_WARN("[audio] could not create the dump {}", ruta.string());
+       return;
+     }
+     const uint32_t bytes = uint32_t(muestras.size() * sizeof(float));
+@@ -131,7 +131,7 @@ void EscribirVolcado(uint32_t cliente, std::vector<float> muestras) {
+     fichero.write("data", 4);
+     u32(bytes);
+     fichero.write(reinterpret_cast<const char*>(muestras.data()), bytes);
+-    REXKRNL_INFO("[audio] volcado del cliente {}: {} muestras por canal en {}", cliente,
++    REXKRNL_INFO("[audio] client {} dump: {} samples per channel in {}", cliente,
+                  muestras.size() / 6, ruta.string());
+   });
+ }
+diff --git a/src/kernel/xboxkrnl/xboxkrnl_io.cpp b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+index d8fac47..d7339d3 100644
+--- a/src/kernel/xboxkrnl/xboxkrnl_io.cpp
++++ b/src/kernel/xboxkrnl/xboxkrnl_io.cpp
+@@ -266,15 +266,15 @@ void QuizaResumenIo(uint64_t ahora_us) {
+   const uint64_t aperturas = d.aperturas_ok + d.aperturas_fallo;
+ 
+   REXKRNL_INFO(
+-      "[io] {} s: {} aperturas ({} fallan) {:.1f} ms en total, peor {:.1f} ms, media {:.2f} ms; "
+-      "{} lecturas {:.1f} MB en {:.1f} ms, peor {:.1f} ms",
++      "[io] {} s: {} opens ({} fail) {:.1f} ms in total, worst {:.1f} ms, mean {:.2f} ms; "
++      "{} reads {:.1f} MB in {:.1f} ms, worst {:.1f} ms",
+       periodo_s, aperturas, d.aperturas_fallo, d.us_aperturas / 1000.0, peor_abrir / 1000.0,
+       aperturas ? (d.us_aperturas / 1000.0) / double(aperturas) : 0.0, d.lecturas,
+       d.bytes_leidos / (1024.0 * 1024.0), d.us_lecturas / 1000.0, peor_leer / 1000.0);
+   REXKRNL_INFO(
+-      "[io] rutas: {} resueltas sin tocar la SD, {} stats, {} barridos de directorio ({} entradas "
+-      "en el arbol); ventana: {} aciertos / {} rellenos / {} directas, {:.1f} MB desde RAM, {} "
+-      "ficheros con ventana",
++      "[io] paths: {} resolved without touching the SD, {} stats, {} directory scans ({} entries "
++      "in the tree); window: {} hits / {} fills / {} direct, {:.1f} MB from RAM, {} "
++      "files with a window",
+       d.misses_en_seco, d.stats_en_sd, d.barridos_en_sd, rutas.entradas_en_arbol, d.aciertos,
+       d.rellenos, d.directas, d.bytes_ram / (1024.0 * 1024.0), ventana.ventanas_vivas);
+ 
+@@ -289,7 +289,7 @@ void QuizaResumenIo(uint64_t ahora_us) {
+    */
+   const uint64_t lecturas_tramo = d.relecturas + d.distintos;
+   REXKRNL_INFO(
+-      "[io] rangos: {} releidas de {} ({:.0f} %), {:.1f} MB ya leidos antes de {:.1f} MB ({:.0f} %); {} "
++      "[io] ranges: {} rereads of {} ({:.0f} %), {:.1f} MB already read before of {:.1f} MB ({:.0f} %); {} "
+       "seguidas ({:.0f} %); {} desalojos",
+       d.relecturas, lecturas_tramo,
+       lecturas_tramo ? 100.0 * double(d.relecturas) / double(lecturas_tramo) : 0.0,
+@@ -320,14 +320,14 @@ void QuizaResumenIo(uint64_t ahora_us) {
+   const uint64_t rangos_total = rangos.aciertos + rangos.fallos;
+   REXKRNL_INFO(
+       "[io] rangos-cache: {} aciertos / {} fallos ({:.0f} %), {:.1f} MB desde RAM contra {:.1f} MB "
+-      "de la SD; {} entradas vivas ({:.1f} MB de {} tope), {} expulsiones; no cacheadas: {} bajo el "
+-      "suelo de {} KB, {} sobre el techo, {} del barrido de carga ({:.1f} MB){}",
++      "from the SD; {} live entries ({:.1f} MB of {} cap), {} evictions; not cached: {} below the "
++      "floor of {} KB, {} above the ceiling, {} from the load scan ({:.1f} MB){}",
+       rangos.aciertos, rangos.fallos,
+       rangos_total ? 100.0 * double(rangos.aciertos) / double(rangos_total) : 0.0,
+       rangos.bytes_ram / (1024.0 * 1024.0), rangos.bytes_disco / (1024.0 * 1024.0), rangos.entradas,
+       rangos.bytes_vivos / (1024.0 * 1024.0), rangos.tope_mb, rangos.expulsiones, rangos.bajo_suelo,
+       rangos.suelo_kb, rangos.sobre_techo, rangos.secuenciales,
+-      rangos.secuenciales_bytes / (1024.0 * 1024.0), rangos.sin_memoria ? " [APAGADA: sin memoria]" : "");
++      rangos.secuenciales_bytes / (1024.0 * 1024.0), rangos.sin_memoria ? " [OFF: out of memory]" : "");
+ }
+ 
+ // Always measured: reading the monotonic clock on Horizon is a processor register read, not a system call.
+@@ -343,7 +343,7 @@ inline void AnotarApertura(uint64_t us, bool ok, const std::string_view ruta) {
+   const int32_t aviso_ms = REXCVAR_GET(nfsmw_io_aviso_ms);
+   if (aviso_ms > 0 && us >= static_cast<uint64_t>(aviso_ms) * 1000ull &&
+       g_io_avisos.fetch_add(1, std::memory_order_relaxed) < 300) {
+-    REXKRNL_WARN("[io] LENTO: abrir '{}' tardo {:.1f} ms ({})", ruta, us / 1000.0,
++    REXKRNL_WARN("[io] SLOW: opening '{}' took {:.1f} ms ({})", ruta, us / 1000.0,
+                  ok ? "abierto" : "no existe");
+   }
+ }
+@@ -361,7 +361,7 @@ inline void AnotarLectura(uint64_t us, uint32_t bytes, const std::string_view ru
+   if (aviso_ms > 0 && us >= static_cast<uint64_t>(aviso_ms) * 1000ull &&
+       g_io_avisos.fetch_add(1, std::memory_order_relaxed) < 300) {
+     // The offset is included. Without it a sequential sweep cannot be told apart from a reread.
+-    REXKRNL_WARN("[io] LENTO: leer {} bytes de '{}' en {} tardo {:.1f} ms{}", bytes, ruta,
++    REXKRNL_WARN("[io] SLOW: reading {} bytes of '{}' at {} took {:.1f} ms{}", bytes, ruta,
+                  desplazamiento, us / 1000.0, releida ? " (RELEIDA)" : "");
+   }
+ }
+@@ -390,7 +390,7 @@ void NfsmwAnotarApertura(const rex::filesystem::Entry* entrada, const std::strin
+     g_nfsmw_wmv_abiertos.erase(g_nfsmw_wmv_abiertos.begin());
+   }
+   g_nfsmw_wmv_abiertos.emplace_back(entrada, ruta);
+-  REXLOG_INFO("[video] el juego abre '{}'", ruta);
++  REXLOG_INFO("[video] the game opens '{}'", ruta);
+ }
+ 
+ void NfsmwAnotarLectura(const rex::filesystem::Entry* entrada) {
+@@ -399,7 +399,7 @@ void NfsmwAnotarLectura(const rex::filesystem::Entry* entrada) {
+     if (e == entrada) {
+       if (r != g_nfsmw_ultimo_wmv_leido) {
+         g_nfsmw_ultimo_wmv_leido = r;
+-        REXLOG_INFO("[video] el juego lee '{}'", r);
++        REXLOG_INFO("[video] the game reads '{}'", r);
+       }
+       return;
+     }
+@@ -1055,7 +1055,7 @@ u32 NtFlushBuffersFile_entry(u32 file_handle, ppc_ptr_t<X_IO_STATUS_BLOCK> io_st
+     result = file->Flush();
+     static std::atomic<uint32_t> avisos{0};
+     if (avisos.fetch_add(1, std::memory_order_relaxed) < 16) {
+-      REXKRNL_INFO("[guardado] NtFlushBuffersFile: {} bajado al disco (resultado {:08X})",
++      REXKRNL_INFO("[save] NtFlushBuffersFile: {} flushed to disk (result {:08X})",
+                    file->path(), uint32_t(result));
+     }
+   }
+diff --git a/src/system/xam/content_manager.cpp b/src/system/xam/content_manager.cpp
+index 78826a6..ff39529 100644
+--- a/src/system/xam/content_manager.cpp
++++ b/src/system/xam/content_manager.cpp
+@@ -186,10 +186,10 @@ void CopiaParaElUsuario(const std::string_view nombre, const std::filesystem::pa
+   uint32_t ficheros = 0;
+   const bool bien = CopiarCarpeta(origen, actual, ficheros);
+   if (bien) {
+-    REXSYS_INFO("[guardado] copia de «{}»: {} fichero(s) en {}", perfil, ficheros,
++    REXSYS_INFO("[save] copy of «{}»: {} file(s) in {}", perfil, ficheros,
+                 rex::path_to_utf8(actual));
+   } else {
+-    REXSYS_WARN("[guardado] la copia de «{}» ha fallado a medias ({} fichero(s) en {})", perfil,
++    REXSYS_WARN("[save] the copy of «{}» failed halfway ({} file(s) in {})", perfil,
+                 ficheros, rex::path_to_utf8(actual));
+   }
+ }
+@@ -331,7 +331,7 @@ std::vector<XCONTENT_AGGREGATE_DATA> ContentManager::ListContent(uint32_t device
+   // What the game sees when it asks for the list of saves. If a profile that exists on disk does not show
+   // up here, the problem is the enumeration; if it shows up and is then reported as damaged, the problem
+   // is its contents.
+-  REXSYS_INFO("[guardado] listar tipo {:08X} en {}: {} entrada(s)", uint32_t(content_type),
++  REXSYS_INFO("[save] list type {:08X} in {}: {} entry(ies)", uint32_t(content_type),
+               rex::path_to_utf8(package_root), result.size());
+   for (const auto& entrada : result) {
+     REXSYS_INFO("[guardado]   «{}» (mostrado como «{}»)", entrada.file_name(),
+@@ -387,8 +387,8 @@ X_RESULT ContentManager::WriteContentHeaderFile(uint64_t xuid, XCONTENT_AGGREGAT
+     fwrite(&license_mask, 1, sizeof(license_mask), file);
+   }
+   const bool bien = fclose(file) == 0;
+-  REXSYS_INFO("[guardado] cabecera de «{}» {} en {}", data.file_name(),
+-              bien ? "escrita" : "FALLO al cerrarse", rex::path_to_utf8(header_path));
++  REXSYS_INFO("[save] header of «{}» {} in {}", data.file_name(),
++              bien ? "escrita" : "FAILED on close", rex::path_to_utf8(header_path));
+   return X_ERROR_SUCCESS;
+ }
+ 
+@@ -435,14 +435,14 @@ X_RESULT ContentManager::CreateContent(const std::string_view root_name, uint64_
+   }
+ 
+   auto package_path = ResolvePackagePath(xuid, data);
+-  REXSYS_INFO("[guardado] crear «{}» (raiz {}) en {}", data.file_name(), root_name,
++  REXSYS_INFO("[save] create «{}» (root {}) in {}", data.file_name(), root_name,
+               rex::path_to_utf8(package_path));
+   if (std::filesystem::exists(package_path)) {
+-    REXSYS_WARN("[guardado] crear «{}»: ya existia, se devuelve ALREADY_EXISTS", data.file_name());
++    REXSYS_WARN("[save] create «{}»: already existed, returning ALREADY_EXISTS", data.file_name());
+     return X_ERROR_ALREADY_EXISTS;
+   }
+   if (!std::filesystem::create_directories(package_path)) {
+-    REXSYS_ERROR("[guardado] crear «{}»: NO se ha podido crear {}", data.file_name(),
++    REXSYS_ERROR("[save] create «{}»: could NOT create {}", data.file_name(),
+                  rex::path_to_utf8(package_path));
+     return X_ERROR_ACCESS_DENIED;
+   }
+@@ -471,14 +471,14 @@ X_RESULT ContentManager::OpenContent(const std::string_view root_name, uint64_t
+ 
+   auto package_path = ResolvePackagePath(xuid, data);
+   if (!std::filesystem::exists(package_path)) {
+-    REXSYS_WARN("[guardado] abrir «{}»: no existe {}", data.file_name(),
++    REXSYS_WARN("[save] open «{}»: {} does not exist", data.file_name(),
+                 rex::path_to_utf8(package_path));
+     return X_ERROR_FILE_NOT_FOUND;
+   }
+   // What the game will find inside. If this says VACIO and the profile is then reported as damaged, the
+   // failure was in saving; if it lists the files with their sizes, the failure is in reading them or in
+   // the contents themselves.
+-  REXSYS_INFO("[guardado] abrir «{}» (raiz {}) en {} -> {}", data.file_name(), root_name,
++  REXSYS_INFO("[save] open «{}» (root {}) in {} -> {}", data.file_name(), root_name,
+               rex::path_to_utf8(package_path), QueHayDentro(package_path));
+   auto package = ResolvePackage(root_name, xuid, data);
+   assert_not_null(package);
+@@ -512,7 +512,7 @@ X_RESULT ContentManager::CloseContent(const std::string_view root_name) {
+   const std::string nombre = package->GetPackageContentData().file_name();
+   delete package;  // unmounts the guest drive: from here on the files are in place
+ 
+-  REXSYS_INFO("[guardado] cerrar «{}» (raiz {}) en {} -> {}", nombre, root_name,
++  REXSYS_INFO("[save] close «{}» (root {}) in {} -> {}", nombre, root_name,
+               rex::path_to_utf8(ruta), QueHayDentro(ruta));
+   CopiaParaElUsuario(nombre, ruta);
+   return X_ERROR_SUCCESS;
+diff --git a/src/ui/deko3d/compilador.cpp b/src/ui/deko3d/compilador.cpp
+index 9e913c3..8a77351 100644
+--- a/src/ui/deko3d/compilador.cpp
++++ b/src/ui/deko3d/compilador.cpp
+@@ -52,7 +52,7 @@ struct Compilador::Datos {
+     uam::init(true);
+     const uam::Result prueba = uam::compile(uam::Stage::Fragment, kAutoprueba);
+     if (prueba.ok) {
+-      Registro("[dk] uam listo: autoprueba compilada en %.1f ms (%zu bytes de DKSH)", (AhoraNs() - t0) / 1e6,
++      Registro("[dk] uam ready: self-test compiled in %.1f ms (%zu bytes of DKSH)", (AhoraNs() - t0) / 1e6,
+                prueba.dksh.size());
+     } else {
+       Registro("[dk] uam: AUTOPRUEBA FALLIDA: %s", prueba.log.c_str());
+@@ -81,7 +81,7 @@ struct Compilador::Datos {
+ Compilador::Compilador() : datos_(std::make_unique<Datos>()) {
+   if (R_FAILED(threadCreate(&datos_->hilo, Datos::Bucle, datos_.get(), nullptr, kPila, kPrioridad, -2)) ||
+       R_FAILED(threadStart(&datos_->hilo))) {
+-    Fatal("[dk] no se pudo crear el hilo de compilacion de shaders (pila de 8 MiB, prioridad 0x%X)", kPrioridad);
++    Fatal("[dk] could not create the shader compile thread (8 MiB stack, priority 0x%X)", kPrioridad);
+   }
+ }
+ 
+diff --git a/src/ui/deko3d/nucleo.cpp b/src/ui/deko3d/nucleo.cpp
+index dba3808..f694e07 100644
+--- a/src/ui/deko3d/nucleo.cpp
++++ b/src/ui/deko3d/nucleo.cpp
+@@ -31,14 +31,14 @@ constexpr uint32_t kHolguraComandos = 256;
+ // DkResult_Success, and errors, after which it traps. The error is logged readably and ends the process here.
+ void ManejarMensaje(void*, const char* contexto, DkResult resultado, const char* mensaje) {
+   if (resultado != DkResult_Success) {
+-    Fatal("[dk] error de deko3d en %s: resultado %d: %s", contexto ? contexto : "?", int(resultado),
++    Fatal("[dk] deko3d error in %s: result %d: %s", contexto ? contexto : "?", int(resultado),
+           mensaje ? mensaje : "");
+   }
+   static int mensajes = 0;
+   if (mensajes < 200) {
+     Registro("[dk] deko3d %s: %s", contexto ? contexto : "?", mensaje ? mensaje : "");
+   } else if (mensajes == 200) {
+-    Registro("[dk] deko3d: hay mas mensajes; no se registran");
++    Registro("[dk] deko3d: more messages; not logged");
+   }
+   ++mensajes;
+ }
+@@ -93,7 +93,7 @@ void Fatal(const char* formato, ...) {
+ Dispositivo::~Dispositivo() { Destruir(); }
+ 
+ void Dispositivo::Crear(bool zcull) {
+-  Registro("[dk] creando el dispositivo de deko3d (origen arriba a la izquierda, profundidad 0..1)");
++  Registro("[dk] creating the deko3d device (origin top left, depth 0..1)");
+   VaciarRegistro();
+   DkDeviceMaker dm;
+   dkDeviceMakerDefaults(&dm);
+@@ -107,7 +107,7 @@ void Dispositivo::Crear(bool zcull) {
+              (zcull ? DkQueueFlags_EnableZcull : DkQueueFlags_DisableZcull);
+   qm.commandMemorySize = 1u << 20;
+   qm.flushThreshold = qm.commandMemorySize / 8;
+-  Registro("[dk] creando la cola: graficos, ZCULL %s", zcull ? "activo" : "apagado");
++  Registro("[dk] creating the queue: graphics, ZCULL %s", zcull ? "on" : "off");
+   VaciarRegistro();
+   cola_ = dkQueueCreate(&qm);
+ }
+@@ -131,7 +131,7 @@ void Dispositivo::Destruir() {
+ DkMemBlock Dispositivo::CrearBloque(uint32_t bytes, uint32_t flags, const char* nombre) {
+   bytes = Alinear(bytes, DK_MEMBLOCK_ALIGNMENT);
+   std::lock_guard<std::mutex> cerrojo(creaciones_);
+-  Registro("[dk] creando un bloque de memoria: %s, %u KiB (flags 0x%X)", nombre, bytes >> 10, flags);
++  Registro("[dk] creating a memory block: %s, %u KiB (flags 0x%X)", nombre, bytes >> 10, flags);
+   VaciarRegistro();  // a failed creation ends the process inside deko3d
+   DkMemBlockMaker m;
+   dkMemBlockMakerDefaults(&m, dispositivo_, bytes);
+@@ -163,7 +163,7 @@ void Dispositivo::DestruirCadena(DkSwapchain cadena) {
+ 
+ void Dispositivo::ComprobarCola(const char* antes_de) const {
+   if (dkQueueIsInErrorState(cola_)) {
+-    Fatal("[dk] la cola de deko3d esta en error (un fallo de la GPU) antes de %s", antes_de);
++    Fatal("[dk] the deko3d queue is in error (a GPU fault) before %s", antes_de);
+   }
+ }
+ 
+@@ -184,7 +184,7 @@ void Dispositivo::Enviar(DkCmdList primera, DkCmdList segunda, const char* que)
+ 
+ void Dispositivo::EsperarInactiva() {
+   std::lock_guard<std::mutex> cerrojo(candado_);
+-  ComprobarCola("esperar a la GPU");
++  ComprobarCola("waiting for the GPU");
+   dkQueueWaitIdle(cola_);
+ }
+ 
+@@ -195,7 +195,7 @@ int Dispositivo::Adquirir(DkSwapchain cadena) {
+   DkFence valla;
+   dkSwapchainAcquireImage(cadena, &imagen, &valla);
+   std::lock_guard<std::mutex> cerrojo(candado_);
+-  ComprobarCola("esperar una imagen de la cadena");
++  ComprobarCola("waiting for a swapchain image");
+   dkQueueWaitFence(cola_, &valla);
+   return imagen;
+ }
+@@ -232,25 +232,25 @@ void Nucleo::Crear(Dispositivo& disp, const ConfigNucleo& config) {
+ 
+   constexpr uint32_t kSinCacheCpu = DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached;
+   const uint32_t n = config_.ranuras;
+-  memoria_comandos_ = CrearBloque(n * (config_.kb_comandos << 10), kSinCacheCpu, "memoria de comandos (por ranura)");
++  memoria_comandos_ = CrearBloque(n * (config_.kb_comandos << 10), kSinCacheCpu, "command memory (per slot)");
+   if (previos_) {
+     memoria_previos_ =
+-        CrearBloque(n * (config_.kb_previos << 10), kSinCacheCpu, "memoria de la lista previa (por ranura)");
++        CrearBloque(n * (config_.kb_previos << 10), kSinCacheCpu, "prelist memory (per slot)");
+   }
+-  subida_ = CrearBloque(n * (config_.mb_subida << 20), kSinCacheCpu, "anillo de subida (por ranura)");
++  subida_ = CrearBloque(n * (config_.mb_subida << 20), kSinCacheCpu, "upload ring (per slot)");
+   subida_cpu_ = static_cast<uint8_t*>(dkMemBlockGetCpuAddr(subida_));
+   subida_gpu_ = dkMemBlockGetGpuAddr(subida_);
+-  codigo_ = CrearBloque(config_.mb_codigo << 20, kSinCacheCpu | DkMemBlockFlags_Code, "codigo de shaders");
++  codigo_ = CrearBloque(config_.mb_codigo << 20, kSinCacheCpu | DkMemBlockFlags_Code, "shader code");
+   descriptores_ = CrearBloque((config_.descriptores_imagen + config_.descriptores_sampler) * 32, kSinCacheCpu,
+-                              "descriptores de imagenes y samplers");
+-  consultas_ = CrearBloque(config_.kb_consultas << 10, kSinCacheCpu, "consultas de la GPU");
++                              "image and sampler descriptors");
++  consultas_ = CrearBloque(config_.kb_consultas << 10, kSinCacheCpu, "GPU queries");
+   consultas_cpu_ = static_cast<uint8_t*>(dkMemBlockGetCpuAddr(consultas_));
+   consultas_gpu_ = dkMemBlockGetGpuAddr(consultas_);
+   std::memset(consultas_cpu_, 0, config_.kb_consultas << 10);
+   ranuras_.assign(n, Ranura{});
+   AnadirTrozo(config_.mb_trozo_imagenes << 20);
+-  Registro("[dk] nucleo listo: %u ranuras, %u MiB de subida, %u KiB de comandos y %u KiB de lista previa por ranura, "
+-           "%u MiB de codigo",
++  Registro("[dk] core ready: %u slots, %u MiB upload, %u KiB of commands and %u KiB of prelist per slot, "
++           "%u MiB of code",
+            n, config_.mb_subida, config_.kb_comandos, previos_ ? config_.kb_previos : 0, config_.mb_codigo);
+ }
+ 
+@@ -302,8 +302,8 @@ void Nucleo::EmpezarTrabajo(uint64_t trabajo) {
+       if (dkFenceWait(&r.valla, 2'000'000'000ll) == DkResult_Success) {
+         break;
+       }
+-      disp_->ComprobarCola("esperar la valla de una ranura");
+-      Registro("[dk] trabajo %llu: la GPU no ha terminado el de la ranura %u tras %d s",
++      disp_->ComprobarCola("waiting for a slot fence");
++      Registro("[dk] job %llu: the GPU has not finished the one in slot %u after %d s",
+                static_cast<unsigned long long>(trabajo), ranura_, espera * 2);
+       VaciarRegistro();
+     }
+@@ -361,7 +361,7 @@ void Nucleo::MasMemoriaDeComandos(DkCmdBuf cual, size_t minimo) {
+   }
+   const uint32_t bytes = std::max<uint32_t>(quiero, 1u << 20);
+   DkMemBlock bloque = CrearBloque(bytes, DkMemBlockFlags_CpuUncached | DkMemBlockFlags_GpuCached,
+-                                  previa ? "lista previa de desborde" : "memoria de comandos de desborde");
++                                  previa ? "overflow prelist" : "overflow command memory");
+   m.desborde.push_back({bloque, bytes});
+   m.desborde_usado = m.desborde.size();
+   dkCmdBufAddMemory(cual, bloque, 0, bytes - kHolguraComandos);
+@@ -385,9 +385,9 @@ void Nucleo::TerminarTrabajo() {
+   dkCmdBufSignalFence(comandos_, &r.valla, true);
+   r.vallada = true;
+   if (previa) {
+-    disp_->Enviar(previa, dkCmdBufFinishList(comandos_), "enviar un trabajo");
++    disp_->Enviar(previa, dkCmdBufFinishList(comandos_), "submitting a job");
+   } else {
+-    disp_->Enviar(dkCmdBufFinishList(comandos_), "enviar un trabajo");
++    disp_->Enviar(dkCmdBufFinishList(comandos_), "submitting a job");
+   }
+   abierto_ = false;
+   ++estadisticas_.trabajos;
+@@ -398,9 +398,9 @@ void Nucleo::TerminarTrabajo() {
+ void Nucleo::EnviarParcial() {
+   const DkCmdList previa = CerrarPrevios();
+   if (previa) {
+-    disp_->Enviar(previa, dkCmdBufFinishList(comandos_), "un envio parcial");
++    disp_->Enviar(previa, dkCmdBufFinishList(comandos_), "a partial submit");
+   } else {
+-    disp_->Enviar(dkCmdBufFinishList(comandos_), "un envio parcial");
++    disp_->Enviar(dkCmdBufFinishList(comandos_), "a partial submit");
+   }
+ }
+ 
+@@ -415,8 +415,8 @@ Subida Nucleo::Reservar(uint32_t bytes, uint32_t alineacion) {
+   const uint32_t offset = Alinear(r.subida_usada, std::max<uint32_t>(alineacion, 4));
+   if (!abierto_ || uint64_t(offset) + bytes > rebanada) {
+     if (estadisticas_.subida_llena++ < 20) {
+-      Registro("[dk] subida: %u bytes no caben en la ranura %u (%u de %u MiB usados)%s", bytes, ranura_,
+-               r.subida_usada >> 20, config_.mb_subida, abierto_ ? "" : " (fuera de un trabajo)");
++      Registro("[dk] upload: %u bytes do not fit in slot %u (%u of %u MiB used)%s", bytes, ranura_,
++               r.subida_usada >> 20, config_.mb_subida, abierto_ ? "" : " (outside a job)");
+     }
+     return {};
+   }
+@@ -444,7 +444,7 @@ DkMemBlock Nucleo::CrearBloqueLectura(uint32_t bytes, const char* nombre) {
+ 
+ void Nucleo::AnadirTrozo(uint32_t bytes) {
+   char nombre[48];
+-  std::snprintf(nombre, sizeof(nombre), "trozo %zu de imagenes", trozos_.size());
++  std::snprintf(nombre, sizeof(nombre), "image chunk %zu", trozos_.size());
+   bytes = Alinear(bytes, DK_MEMBLOCK_ALIGNMENT);
+   Trozo t;
+   t.bloque = CrearBloque(bytes, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, nombre);
+@@ -492,7 +492,7 @@ BloqueImagen Nucleo::ReservarImagen(uint32_t bytes, uint32_t alineacion) {
+     }
+     AnadirTrozo(std::max(config_.mb_trozo_imagenes << 20, Alinear(bytes + alineacion, DK_MEMBLOCK_ALIGNMENT)));
+   }
+-  Fatal("[dk] el monton de imagenes no puede colocar %u bytes", bytes);
++  Fatal("[dk] the image heap cannot place %u bytes", bytes);
+ }
+ 
+ void Nucleo::LiberarImagenLuego(const BloqueImagen& bloque) {
+@@ -512,18 +512,18 @@ bool Nucleo::CargarShader(DkShader& shader, std::span<const uint8_t> dksh, const
+     uint32_t magia, bytes_cabecera, bytes_control, bytes_codigo, programas_offset, programas;
+   } c;
+   if (dksh.size() < sizeof(c)) {
+-    Registro("[dk] shader %s: %zu bytes, no es un DKSH", nombre, dksh.size());
++    Registro("[dk] shader %s: %zu bytes, not a DKSH", nombre, dksh.size());
+     return false;
+   }
+   std::memcpy(&c, dksh.data(), sizeof(c));
+   if (c.magia != 0x48534B44u || c.programas != 1 || uint64_t(c.bytes_control) + c.bytes_codigo > dksh.size()) {
+-    Registro("[dk] shader %s: no es un DKSH de un programa (magia 0x%08X, %u programas)", nombre, c.magia,
++    Registro("[dk] shader %s: not a single-program DKSH (magic 0x%08X, %u programs)", nombre, c.magia,
+              c.programas);
+     return false;
+   }
+   const uint32_t at = Alinear(codigo_usado_, DK_SHADER_CODE_ALIGNMENT);
+   if (uint64_t(at) + c.bytes_codigo > (config_.mb_codigo << 20) - DK_SHADER_CODE_UNUSABLE_SIZE) {
+-    Registro("[dk] memoria de codigo llena: %s (%u bytes) no se carga", nombre, c.bytes_codigo);
++    Registro("[dk] code memory full: %s (%u bytes) not loaded", nombre, c.bytes_codigo);
+     return false;
+   }
+   std::memcpy(static_cast<uint8_t*>(dkMemBlockGetCpuAddr(codigo_)) + at, dksh.data() + c.bytes_control,
+@@ -614,9 +614,9 @@ void Presentacion::Crear(Dispositivo& disp, uint32_t ancho, uint32_t alto, uint3
+   dkImageLayoutInitialize(&disposicion, &lm);
+   const uint32_t alineacion = dkImageLayoutGetAlignment(&disposicion);
+   const uint32_t bytes = Alinear(uint32_t(dkImageLayoutGetSize(&disposicion)), alineacion);
+-  Registro("[dk] creando la cadena de presentacion: %u imagenes RGBA8 de %ux%u", kImagenes, ancho, alto);
++  Registro("[dk] creating the swapchain: %u RGBA8 images of %ux%u", kImagenes, ancho, alto);
+   memoria_ = disp.CrearBloque(kImagenes * bytes, DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image,
+-                              "imagenes de la cadena de presentacion");
++                              "swapchain images");
+   const DkImage* imagenes[kImagenes];
+   for (uint32_t i = 0; i < kImagenes; ++i) {
+     dkImageInitialize(&imagenes_[i], &disposicion, memoria_, i * bytes);
+diff --git a/src/ui/deko3d/presentador.cpp b/src/ui/deko3d/presentador.cpp
+index cdf084b..2ab2d78 100644
+--- a/src/ui/deko3d/presentador.cpp
++++ b/src/ui/deko3d/presentador.cpp
+@@ -63,7 +63,7 @@ bool CompilarPropio(ProveedorDeko3d& proveedor, Nucleo& nucleo, DkShader& shader
+                     const char* nombre) {
+   Compilador::Resultado r = proveedor.compilador().Compilar(vertices, glsl);
+   if (!r.ok) {
+-    Registro("[dk] el shader propio %s no compila: %s", nombre, r.log.c_str());
++    Registro("[dk] own shader %s does not compile: %s", nombre, r.log.c_str());
+     return false;
+   }
+   return nucleo.CargarShader(shader, r.dksh, nombre);
+@@ -201,7 +201,7 @@ class PresentadorDeko3d final : public Presenter {
+     if (captura_bytes_ < bytes) {
+       // A read-back block (CPU-cached, GPU-uncached); the old one goes when the Nucleo does.
+       captura_bytes_ = (bytes + 0xFFFF) & ~0xFFFFu;
+-      captura_bloque_ = captura_.CrearBloqueLectura(captura_bytes_, "captura de la salida");
++      captura_bloque_ = captura_.CrearBloqueLectura(captura_bytes_, "output capture");
+     }
+     dkMemBlockFlushCpuCache(captura_bloque_, 0, bytes);  // before the GPU writes it
+     captura_.EmpezarTrabajo(++captura_trabajo_);
+@@ -249,7 +249,7 @@ class PresentadorDeko3d final : public Presenter {
+     cadena_.Destruir();
+     ventana_ = ventana;
+     cadena_.Crear(proveedor_.dispositivo(), ancho, alto, 0, ventana);
+-    REXLOG_INFO("[deko3d] presentador: cadena de {}x{} en la ventana del sistema", ancho, alto);
++    REXLOG_INFO("[deko3d] presenter: {}x{} swapchain in the system window", ancho, alto);
+     return SurfacePaintConnectResult::kSuccess;
+   }
+ 
+@@ -277,7 +277,7 @@ class PresentadorDeko3d final : public Presenter {
+       DkImageLayout disposicion;
+       dkImageLayoutInitialize(&disposicion, &m);
+       char nombre[48];
+-      std::snprintf(nombre, sizeof(nombre), "salida del juego %u (%ux%u)", mailbox_index, ancho, alto);
++      std::snprintf(nombre, sizeof(nombre), "game output %u (%ux%u)", mailbox_index, ancho, alto);
+       s.memoria = d.CrearBloque(uint32_t(dkImageLayoutGetSize(&disposicion)),
+                                 DkMemBlockFlags_GpuCached | DkMemBlockFlags_Image, nombre);
+       dkImageInitialize(&s.imagen, &disposicion, s.memoria, 0);
+@@ -448,7 +448,7 @@ class DibujanteDeko3d final : public rex::ui::ImmediateDrawer {
+                                                            rex::ui::ImmediateTextureFilter filtro, bool repetida,
+                                                            const uint8_t* datos) override {
+     if (libres_.empty() || !ancho || !alto) {
+-      REXLOG_ERROR("[deko3d] dibujante: no quedan descriptores para una textura de {}x{}", ancho, alto);
++      REXLOG_ERROR("[deko3d] drawer: no descriptors left for a {}x{} texture", ancho, alto);
+       return nullptr;
+     }
+     auto t = std::make_unique<TexturaDeko3d>(*this, ancho, alto);
+@@ -628,7 +628,7 @@ std::unique_ptr<rex::ui::Presenter> ProveedorDeko3d::CreatePresenter(
+     rex::ui::Presenter::HostGpuLossCallback host_gpu_loss_callback) {
+   auto p = std::make_unique<PresentadorDeko3d>(*this, host_gpu_loss_callback);
+   if (!p->Inicializar()) {
+-    REXLOG_ERROR("[deko3d] No se pudo inicializar el presentador");
++    REXLOG_ERROR("[deko3d] Could not initialize the presenter");
+     return nullptr;
+   }
+   return p;
+@@ -637,7 +637,7 @@ std::unique_ptr<rex::ui::Presenter> ProveedorDeko3d::CreatePresenter(
+ std::unique_ptr<rex::ui::ImmediateDrawer> ProveedorDeko3d::CreateImmediateDrawer() {
+   auto d = std::make_unique<DibujanteDeko3d>(*this);
+   if (!d->Inicializar()) {
+-    REXLOG_ERROR("[deko3d] No se pudo inicializar el dibujante de la interfaz");
++    REXLOG_ERROR("[deko3d] Could not initialize the UI drawer");
+     return nullptr;
+   }
+   return d;
+diff --git a/src/ui/presenter.cpp b/src/ui/presenter.cpp
+index b4c89f1..55f88a7 100644
+--- a/src/ui/presenter.cpp
++++ b/src/ui/presenter.cpp
+@@ -90,7 +90,7 @@ REXCVAR_DEFINE_BOOL(host_present_ignore_implicit_vsync, true, "UI/Presenter",
+  *
+  * Not deleted: the mechanism works, it is measured and the switch is still there. It would only pay off
+  * if presenting cost the recording thread nothing, and that needs a separate Vulkan queue, not another
+- * priority tweak (the priority is already applied: "aceptada por el kernel"). The device has a single
++ * priority tweak (the priority is already applied: "accepted by the kernel"). The device has a single
+  * queue (see docs/platform-notes.md, Presentation).
+  */
+ REXCVAR_DEFINE_BOOL(present_hilo_propio, REX_PRESENT_HILO_PROPIO_DEFAULT, "UI/Presenter",
+@@ -1438,10 +1438,10 @@ void Presenter::SetPaintModeFromUIThread(PaintMode new_mode) {
+     return;
+   }
+   // Say it in the log. Whether every rendered frame reaches the screen depends on this.
+-  REXLOG_INFO("Presenter: modo de pintado -> {} (vsync implicito {}, dibujantes de interfaz {})",
++  REXLOG_INFO("Presenter: paint mode -> {} (implicit vsync {}, UI drawers {})",
+               new_mode == PaintMode::kGuestOutputThreadImmediately
+-                  ? "desde el hilo del juego, presentando en el acto"
+-                  : (new_mode == PaintMode::kUIThreadOnRequest ? "en el hilo de la interfaz, a peticion"
++                  ? "from the game thread, presenting immediately"
++                  : (new_mode == PaintMode::kUIThreadOnRequest ? "on the UI thread, on request"
+                                                                : "ninguno"),
+               surface_paint_connection_has_implicit_vsync_ ? "si" : "no", ui_drawers_.size());
+   // The own thread is started before the mode is announced, so the game thread never sees
+@@ -1691,14 +1691,14 @@ void Presenter::StartPaintThreadFromUIThread() {
+   if (!paint_thread_) {
+     // Not fatal: without the thread, painting keeps happening inside the game thread, as always.
+     REXLOG_WARN(
+-        "Presenter: no se pudo crear el hilo de presentacion; se presenta en el hilo del juego");
++        "Presenter: could not create the present thread; presenting on the game thread");
+     return;
+   }
+   paint_thread_->set_name("Presenter Paint");
+   paint_thread_activo_.store(true, std::memory_order_release);
+   REXLOG_INFO(
+-      "Presenter: hilo de presentacion propio en marcha (prioridad de Horizon {:#x}). El hilo que "
+-      "genera la imagen ya no se bloquea presentando",
++      "Presenter: own present thread running (Horizon priority {:#x}). The thread that "
++      "renders the image no longer blocks presenting",
+       uint32_t(REXCVAR_GET(present_hilo_prioridad)));
+ }
+ 
+@@ -1718,7 +1718,7 @@ void Presenter::ShutdownPaintThread() {
+   }
+   rex::thread::Wait(paint_thread_.get(), false);
+   paint_thread_.reset();
+-  REXLOG_INFO("Presenter: hilo de presentacion parado ({} avisos, {} pintados, {} descartados)",
++  REXLOG_INFO("Presenter: present thread stopped ({} signals, {} painted, {} dropped)",
+               paint_thread_avisos_, paint_thread_pintados_, paint_thread_descartados_);
+ }
+ 
+@@ -1834,15 +1834,15 @@ void Presenter::RequestPaintFromPaintThread() {
+   // The log, outside the lock.
+   if (rendirse && paint_thread_activo_.exchange(false)) {
+     REXLOG_WARN(
+-        "[presentador] el hilo propio no da abasto: el juego lleva esperandole {:.2f} ms de media por "
+-        "fotograma, por encima del limite. Se apaga y se vuelve a presentar desde el hilo del juego, "
+-        "que es lo que hacia la compilacion 114: menos FPS, pero mas liso",
++        "[presenter] the own thread cannot keep up: the game has waited for it {:.2f} ms on average per "
++        "frame, above the limit. Turning it off and presenting from the game thread again, "
++        "as build 114 did: fewer FPS, but smoother",
+         paint_thread_espera_media_us_ / 1000.0);
+   }
+   if (avisos % 600 == 0) {
+     REXLOG_INFO(
+-        "[presentador] hilo propio: {} fotogramas avisados, {} presentados, {} descartados ({:.1f} %); "
+-        "el juego espero al presentador {} veces, {:.2f} ms de media",
++        "[presenter] own thread: {} frames signalled, {} presented, {} dropped ({:.1f} %); "
++        "the game waited for the presenter {} times, {:.2f} ms on average",
+         avisos, pintados, descartados, 100.0 * double(descartados) / double(avisos), esperas,
+         esperas ? double(espera_ns) / 1e6 / double(esperas) : 0.0);
+   }
+@@ -1895,10 +1895,10 @@ void Presenter::PaintThreadMain() {
+      * explain the 18-22 ms it took to record a quad.
+      */
+     const bool ok = RexSwitchSetCurrentThreadPriorityOk(prioridad);
+-    REXLOG_INFO("[presentador] prioridad de Horizon {:#x}: {}", uint32_t(prioridad),
+-                ok ? "aceptada por el kernel" : "*** RECHAZADA: el hilo se queda con la de serie ***");
++    REXLOG_INFO("[presenter] Horizon priority {:#x}: {}", uint32_t(prioridad),
++                ok ? "accepted by the kernel" : "*** REJECTED: the thread keeps the default ***");
+   } else {
+-    REXLOG_WARN("Presenter: present_hilo_prioridad = {} fuera de 0x1C-0x3B: se deja la de serie",
++    REXLOG_WARN("Presenter: present_hilo_prioridad = {} outside 0x1C-0x3B: keeping the default",
+                 prioridad);
+   }
+ #endif
+diff --git a/src/ui/windowed_app_context_switch.cpp b/src/ui/windowed_app_context_switch.cpp
+index 7755dc3..e71bf2a 100644
+--- a/src/ui/windowed_app_context_switch.cpp
++++ b/src/ui/windowed_app_context_switch.cpp
+@@ -191,7 +191,7 @@ int SwitchWindowedAppContext::RunMainMessageLoop() {
+         impl_->sobremesa_efectivo = sobremesa;
+       } else if (sobremesa != impl_->sobremesa_efectivo) {
+         impl_->sobremesa_efectivo = sobremesa;
+-        REXLOG_INFO("Switch: Reverse-NX ahora dice {}: se cambia el tamano de la ventana",
++        REXLOG_INFO("Switch: Reverse-NX now says {}: resizing the window",
+                     sobremesa ? "sobremesa" : "portatil");
+         display_changed_ = true;
+       }
+diff --git a/src/x360/deko/destinos.cpp b/src/x360/deko/destinos.cpp
+index dcd46c7..43021d4 100644
+--- a/src/x360/deko/destinos.cpp
++++ b/src/x360/deko/destinos.cpp
+@@ -310,11 +310,11 @@ RenderDk::RenderDk(deko::ProveedorDeko3d& proveedor, rex::memory::Memory* memori
+   descriptores_por_liberar_.resize(kRanuras);
+   lecturas_.resize(kRanuras);
+   marcas_.resize(kRanuras);
+-  lectura_bloque_ = nucleo_.CrearBloqueLectura(kRanuras * kBytesLecturaRanura, "lecturas de vuelta (por ranura)");
++  lectura_bloque_ = nucleo_.CrearBloqueLectura(kRanuras * kBytesLecturaRanura, "read-backs (per slot)");
+   lectura_cpu_ = static_cast<uint8_t*>(dkMemBlockGetCpuAddr(lectura_bloque_));
+   lectura_gpu_ = dkMemBlockGetGpuAddr(lectura_bloque_);
+   if (REXCVAR_GET(nfsmw_dk_perfil_gpu_s) > 0) {
+-    perfil_bloque_ = nucleo_.CrearBloqueLectura(kMarcasPerfil * 32, "perfil de la GPU por dibujo");
++    perfil_bloque_ = nucleo_.CrearBloqueLectura(kMarcasPerfil * 32, "per-draw GPU profile");
+     perfil_cpu_ = static_cast<uint8_t*>(dkMemBlockGetCpuAddr(perfil_bloque_));
+     perfil_gpu_ = dkMemBlockGetGpuAddr(perfil_bloque_);
+     perfil_marcas_.reserve(kMarcasPerfil);
+@@ -337,13 +337,13 @@ RenderDk::RenderDk(deko::ProveedorDeko3d& proveedor, rex::memory::Memory* memori
+     }
+     std::vector<uint8_t> datos((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+     if (cache_.Cargar(datos, motivo)) {
+-      REXLOG_INFO("[deko3d] cache de DKSH: {} entradas de {}", cache_.size(), ruta.string());
++      REXLOG_INFO("[deko3d] DKSH cache: {} entries from {}", cache_.size(), ruta.string());
+       break;
+     }
+-    REXLOG_WARN("[deko3d] cache de DKSH {} no se usa: {}", ruta.string(), motivo);
++    REXLOG_WARN("[deko3d] DKSH cache {} not used: {}", ruta.string(), motivo);
+   }
+   if (!cache_.size()) {
+-    REXLOG_WARN("[deko3d] sin cache de DKSH: cada shader se compila en la consola la primera vez que se usa");
++    REXLOG_WARN("[deko3d] no DKSH cache: each shader is compiled on the console the first time it is used");
+   }
+   cache_guardada_ns_ = deko::AhoraNs();
+ 
+@@ -352,13 +352,13 @@ RenderDk::RenderDk(deko::ProveedorDeko3d& proveedor, rex::memory::Memory* memori
+     fs_vacio_valido_ = nucleo_.CargarShader(fs_vacio_, vacio.dksh, "fragmentos vacio");
+   }
+   if (!fs_vacio_valido_) {
+-    REXLOG_ERROR("[deko3d] no se pudo compilar el pixel shader vacio: {}", vacio.log);
++    REXLOG_ERROR("[deko3d] could not compile the empty pixel shader: {}", vacio.log);
+   }
+   CrearShadersSalida();
+   AsegurarTrabajo();
+   CrearVacias();
+-  REXLOG_INFO("[deko3d] destinos: etapa P2 (videos, menus y titulo): {} MB de subida por ranura, compresion de color "
+-              "{}, rampa de gamma {}",
++  REXLOG_INFO("[deko3d] targets: stage P2 (videos, menus and title): {} MB upload per slot, color compression "
++              "{}, gamma ramp {}",
+               config.mb_subida, REXCVAR_GET(nfsmw_dk_compresion_color) ? "SI" : "no", rampa_gamma_ ? "SI" : "no");
+ }
+ 
+@@ -623,7 +623,7 @@ deko::Subida RenderDk::Reservar(uint32_t bytes, uint32_t alineacion) {
+ bool RenderDk::CrearImagen(ImagenDk& imagen, DkImageType tipo, DkImageFormat formato, uint32_t ancho, uint32_t alto,
+                            uint32_t capas, uint32_t niveles, uint32_t flags, const char* que) {
+   if (!ancho || !alto || ancho > 16384 || alto > 16384) {
+-    REXLOG_WARN("[deko3d] {} de {}x{}: tamano imposible", que, ancho, alto);
++    REXLOG_WARN("[deko3d] {} of {}x{}: impossible size", que, ancho, alto);
+     return false;
+   }
+   DkImageLayoutMaker m;
+@@ -695,7 +695,7 @@ void RenderDk::PrepararDestino(ImagenDk& imagen) {
+ 
+ ImagenDk* RenderDk::DestinoColor(uint32_t base, uint32_t formato, uint32_t pitch) {
+   if (!pitch) {
+-    Rechazar(7, "destino de render con pitch 0");
++    Rechazar(7, "render target with pitch 0");
+     return nullptr;
+   }
+   const uint64_t clave = (uint64_t(base) << 20) | (uint64_t(formato) << 16) | pitch;
+@@ -709,11 +709,11 @@ ImagenDk* RenderDk::DestinoColor(uint32_t base, uint32_t formato, uint32_t pitch
+   if (REXCVAR_GET(nfsmw_dk_compresion_color)) {
+     flags |= DkImageFlags_HwCompression;
+   }
+-  if (!CrearImagen(imagen, DkImageType_2D, DkImageFormat_RGBA8_Unorm, pitch, alto, 1, 1, flags, "destino de color")) {
+-    Rechazar(8, "no se pudo crear un destino de render");
++  if (!CrearImagen(imagen, DkImageType_2D, DkImageFormat_RGBA8_Unorm, pitch, alto, 1, 1, flags, "color target")) {
++    Rechazar(8, "could not create a render target");
+     return nullptr;
+   }
+-  REXLOG_INFO("[deko3d] destino de render base {:03X}, formato {}, {}x{}", base, formato, pitch, alto);
++  REXLOG_INFO("[deko3d] render target base {:03X}, format {}, {}x{}", base, formato, pitch, alto);
+   ImagenDk& nueva = destinos_.emplace(clave, imagen).first->second;
+   PrepararDestino(nueva);
+   return &nueva;
+@@ -721,7 +721,7 @@ ImagenDk* RenderDk::DestinoColor(uint32_t base, uint32_t formato, uint32_t pitch
+ 
+ ImagenDk* RenderDk::DestinoProfundidad(uint32_t base, uint32_t formato, uint32_t pitch) {
+   if (!pitch) {
+-    Rechazar(11, "sin destino de profundidad (pitch 0)");
++    Rechazar(11, "no depth target (pitch 0)");
+     return nullptr;
+   }
+   const uint64_t clave = (uint64_t(base) << 20) | (uint64_t(formato) << 16) | pitch;
+@@ -734,11 +734,11 @@ ImagenDk* RenderDk::DestinoProfundidad(uint32_t base, uint32_t formato, uint32_t
+   // compression: untested on deko3d, and copies broke it on nouveau (HowToDeko3d.md, section 5.10).
+   static const uint32_t flags_z =
+       DkImageFlags_UsageRender | (REXCVAR_GET(nfsmw_dk_compresion_profundidad) ? DkImageFlags_HwCompression : 0u);
+-  if (!CrearImagen(imagen, DkImageType_2D, DkImageFormat_Z24S8, pitch, alto, 1, 1, flags_z, "destino de profundidad")) {
+-    Rechazar(12, "no se pudo crear un destino de profundidad");
++  if (!CrearImagen(imagen, DkImageType_2D, DkImageFormat_Z24S8, pitch, alto, 1, 1, flags_z, "depth target")) {
++    Rechazar(12, "could not create a depth target");
+     return nullptr;
+   }
+-  REXLOG_INFO("[deko3d] destino de profundidad base {:03X}, formato {}, {}x{}", base, formato, pitch, alto);
++  REXLOG_INFO("[deko3d] depth target base {:03X}, format {}, {}x{}", base, formato, pitch, alto);
+   ImagenDk& nueva = profundidades_.emplace(clave, imagen).first->second;
+   PrepararDestino(nueva);
+   return &nueva;
+@@ -747,7 +747,7 @@ ImagenDk* RenderDk::DestinoProfundidad(uint32_t base, uint32_t formato, uint32_t
+ RenderDk::Resuelta* RenderDk::ObtenerResuelta(uint32_t base, uint32_t ancho, uint32_t alto, uint32_t formato,
+                                               bool intercambio_rb, bool profundidad) {
+   if (!ancho || !alto) {
+-    Rechazar(9, "copia a una textura de tamano 0");
++    Rechazar(9, "copy to a texture of size 0");
+     return nullptr;
+   }
+   const DkImageFormat formato_host = profundidad ? DkImageFormat_Z24S8 : DkImageFormat_RGBA8_Unorm;
+@@ -776,14 +776,14 @@ RenderDk::Resuelta* RenderDk::ObtenerResuelta(uint32_t base, uint32_t ancho, uin
+       profundidad ? DkImageFlags_UsageRender |
+                         (REXCVAR_GET(nfsmw_dk_compresion_profundidad) ? DkImageFlags_HwCompression : 0u)
+                   : DkImageFlags_UsageRender | DkImageFlags_Usage2DEngine;
+-  if (!CrearImagen(r.imagen, DkImageType_2D, formato_host, ancho, alto, 1, 1, flags, "textura resuelta")) {
+-    Rechazar(10, "no se pudo crear una textura resuelta");
++  if (!CrearImagen(r.imagen, DkImageType_2D, formato_host, ancho, alto, 1, 1, flags, "resolved texture")) {
++    Rechazar(10, "could not create a resolved texture");
+     return nullptr;
+   }
+   r.formato_guest = formato;
+   r.imagen.intercambio_rb = intercambio_rb;
+-  REXLOG_INFO("[deko3d] textura resuelta en {:08X}, {}x{}, formato {}{}", base, ancho, alto, formato,
+-              profundidad ? " (profundidad)" : "");
++  REXLOG_INFO("[deko3d] resolved texture at {:08X}, {}x{}, format {}{}", base, ancho, alto, formato,
++              profundidad ? " (depth)" : "");
+   ++generacion_texturas_;  // that address is now sampled from the resolved texture
+   return &resueltas_.emplace(base, std::move(r)).first->second;
+ }
+@@ -796,8 +796,8 @@ const ImagenDk* RenderDk::TexturaResuelta(uint32_t direccion) {
+     frontal_obsoleta_ = 0;
+     if (!frontal_apagado_) {
+       frontal_apagado_ = true;
+-      REXLOG_WARN("[deko3d] frontal perezoso: un dibujo muestrea el frontal {:08X} despues del Swap; se copia siempre "
+-                  "a partir de ahora",
++      REXLOG_WARN("[deko3d] lazy front buffer: a draw samples the front buffer {:08X} after the Swap; always copying "
++                  "from now on",
+                   direccion);
+     }
+   }
+@@ -831,7 +831,7 @@ bool RenderDk::Rectangulo(const RegistrosCopia& reg, uint32_t pitch, int32_t& x0
+   const auto orden = static_cast<xenos::Endian>(reg.fetch_vertices[1] & 0x3);
+   const uint32_t tamano = (reg.fetch_vertices[1] >> 2) & 0xFFFFFF;
+   if (tipo != uint32_t(xenos::FetchConstantType::kVertex) || tamano != 3 * 2) {
+-    return Rechazar(5, "vertices de la copia en un formato no soportado");
++    return Rechazar(5, "copy vertices in an unsupported format");
+   }
+   const uint8_t* vertices = memoria_->TranslatePhysical(direccion * 4);
+   const float medio_pixel = (reg.pa_su_vtx_cntl & 0x1) == uint32_t(xenos::PixelCenter::kD3DZero) ? 0.5f : 0.0f;
+@@ -879,7 +879,7 @@ bool RenderDk::Rectangulo(const RegistrosCopia& reg, uint32_t pitch, int32_t& x0
+   x0 = std::min(x0, pitch_alineado);
+   x1 = std::min(x1, pitch_alineado);
+   if (x0 >= x1 || y0 >= y1) {
+-    return Rechazar(6, "rectangulo de copia vacio");
++    return Rechazar(6, "empty copy rectangle");
+   }
+   return true;
+ }
+@@ -908,7 +908,7 @@ bool RenderDk::Copiar(const RegistrosCopia& reg) {
+   const uint32_t formato_color = (info_color >> 16) & 0xF;
+   if (formato_color != uint32_t(xenos::ColorRenderTargetFormat::k_8_8_8_8) &&
+       formato_color != uint32_t(xenos::ColorRenderTargetFormat::k_8_8_8_8_GAMMA)) {
+-    return Rechazar(100 + formato_color, "formato de destino de render todavia no soportado");
++    return Rechazar(100 + formato_color, "render target format not supported yet");
+   }
+   int32_t x0, y0, x1, y1;
+   if (!Rectangulo(reg, pitch, x0, y0, x1, y1)) {
+@@ -926,11 +926,11 @@ bool RenderDk::Copiar(const RegistrosCopia& reg) {
+     uint32_t dx = 0, dy = 0;
+     uint32_t base_resuelta = 0;
+     if ((info_destino >> 3) & 0x1) {
+-      Rechazar(3, "copia a textura 3D o array: todavia no");
++      Rechazar(3, "copy to a 3D or array texture: not yet");
+     } else if (formato_destino != uint32_t(xenos::ColorFormat::k_8_8_8_8) &&
+                formato_destino != uint32_t(xenos::ColorFormat::k_8_8_8_8_A) &&
+                formato_destino != uint32_t(xenos::ColorFormat::k_8_8_8_8_AS_16_16_16_16)) {
+-      Rechazar(200 + formato_destino, "formato de copia todavia no soportado");
++      Rechazar(200 + formato_destino, "copy format not supported yet");
+     } else {
+       const uint32_t pitch_destino = reg.rb_copy_dest_pitch & 0x3FFF;
+       const uint32_t alto_destino = (reg.rb_copy_dest_pitch >> 16) & 0x3FFF;
+@@ -1226,7 +1226,7 @@ void RenderDk::RestaurarContenido(ImagenDk& destino, bool para_resolver) {
+ void RenderDk::CopiarProfundidad(const RegistrosCopia& reg, uint32_t pitch, bool borrara) {
+   const uint32_t info_destino = reg.rb_copy_dest_info;
+   if ((info_destino >> 3) & 0x1) {
+-    Rechazar(3, "copia a textura 3D o array: todavia no");
++    Rechazar(3, "copy to a 3D or array texture: not yet");
+     return;
+   }
+   int32_t x0, y0, x1, y1;
+@@ -1311,8 +1311,8 @@ void RenderDk::SombraMinimoDiferencia(const char* motivo, uint32_t dato) {
+   ++sm_diferencias_;
+   if (sm_fase_ != kSmApagada) {
+     sm_fase_ = kSmApagada;
+-    REXLOG_ERROR("[deko3d] sombra por minimo: DIFERENCIA ({}; dato {:08X}). Se apaga para la sesion: el mapa de "
+-                 "sombras se vuelve a restaurar copiando",
++    REXLOG_ERROR("[deko3d] min shadow: MISMATCH ({}; value {:08X}). Off for the session: the shadow "
++                 "map is restored by copying again",
+                  motivo, dato);
+   }
+ }
+@@ -1320,7 +1320,7 @@ void RenderDk::SombraMinimoDiferencia(const char* motivo, uint32_t dato) {
+ void RenderDk::SombraMinimoNoApto(const char* motivo, uint32_t dato) {
+   if (sm_fase_ != kSmApagada) {
+     sm_fase_ = kSmApagada;
+-    REXLOG_WARN("[deko3d] sombra por minimo: no se aplica en esta sesion ({}; dato {:08X})", motivo, dato);
++    REXLOG_WARN("[deko3d] min shadow: not applied this session ({}; value {:08X})", motivo, dato);
+   }
+ }
+ 
+@@ -1394,8 +1394,8 @@ void RenderDk::SombraMinimoTrasIntercambio(const ImagenDk& destino, uint32_t bas
+   sm_limpios_seguidos_ = (sm_ciclo_limpio_ && !sm_mundo_reescrito_) ? sm_limpios_seguidos_ + 1 : 0;
+   if (sm_fase_ == kSmMirando && sm_encendido_ && sm_limpios_seguidos_ >= kSombraMinimoCiclos) {
+     sm_fase_ = kSmAplicando;
+-    REXLOG_INFO("[deko3d] sombra por minimo: APLICANDO tras {} ciclos limpios seguidos (mundo en {:08X}, coches en "
+-                "{:08X}): el pase de los coches se dibuja sobre el destino borrado y no se copia",
++    REXLOG_INFO("[deko3d] min shadow: APPLYING after {} clean cycles in a row (world at {:08X}, cars at "
++                "{:08X}): the cars pass is drawn over the cleared target and not copied",
+                 sm_limpios_seguidos_, sm_mundo_, sm_coches_);
+   }
+ }
+@@ -1523,7 +1523,7 @@ void RenderDk::LeerResuelta(const RegistrosCopia& reg, const ImagenDk& imagen, i
+   const uint32_t bytes = ancho * alto * 4;
+   if (l.usados + bytes > kBytesLecturaRanura) {
+     if (lecturas_sin_sitio_++ == 0) {
+-      REXLOG_WARN("[deko3d] lecturas de vuelta: no caben mas en la ranura ({} KB); el juego vera la anterior",
++      REXLOG_WARN("[deko3d] read-backs: no more fit in the slot ({} KB); the game will see the previous one",
+                   kBytesLecturaRanura >> 10);
+     }
+     return;
+@@ -1540,7 +1540,7 @@ void RenderDk::LeerResuelta(const RegistrosCopia& reg, const ImagenDk& imagen, i
+   l.pendientes.push_back({offset, reg.rb_copy_dest_base, x0, y0, ancho, alto, reg.rb_copy_dest_pitch & 0x3FFF,
+                           (reg.rb_copy_dest_pitch >> 16) & 0x3FFF, reg.rb_copy_dest_info});
+   if (lecturas_hechas_++ == 0) {
+-    REXLOG_INFO("[deko3d] lectura de vuelta de texturas resueltas de hasta {} texels (la primera: {:08X}, {}x{})",
++    REXLOG_INFO("[deko3d] read-back of resolved textures up to {} texels (the first: {:08X}, {}x{})",
+                 maximo, reg.rb_copy_dest_base, ancho, alto);
+   }
+ }
+@@ -1666,14 +1666,14 @@ bool RenderDk::CrearShadersSalida() {
+   const deko::Compilador::Resultado vs = compilador_.Compilar(true, kVsSalida);
+   vs_salida_valido_ = vs.ok && nucleo_.CargarShader(vs_salida_, vs.dksh, "salida (vertices)");
+   if (!vs_salida_valido_) {
+-    REXLOG_ERROR("[deko3d] no se pudo compilar el vertex shader de la salida: {}", vs.log);
++    REXLOG_ERROR("[deko3d] could not compile the output vertex shader: {}", vs.log);
+   }
+   const deko::Compilador::Resultado color = compilador_.Compilar(false, kFsCopiaColor);
+   fs_copia_color_valido_ = color.ok && nucleo_.CargarShader(fs_copia_color_, color.dksh, "copia de color");
+   const deko::Compilador::Resultado z = compilador_.Compilar(false, kFsCopiaProfundidad);
+   fs_copia_profundidad_valido_ = z.ok && nucleo_.CargarShader(fs_copia_profundidad_, z.dksh, "copia de profundidad");
+   if (!fs_copia_color_valido_ || !fs_copia_profundidad_valido_) {
+-    REXLOG_ERROR("[deko3d] no se pudieron compilar las copias en el motor 3D ({} / {}): se copia con el motor de copias",
++    REXLOG_ERROR("[deko3d] could not compile the 3D engine copies ({} / {}): copying with the copy engine",
+                  color.log, z.log);
+   }
+   return vs_salida_valido_ && ShaderRampa(kRampaExacta) != nullptr;
+@@ -1698,10 +1698,10 @@ const DkShader* RenderDk::ShaderRampa(uint32_t variante) {
+   const deko::Compilador::Resultado r = compilador_.Compilar(false, glsl);
+   auto shader = std::make_unique<DkShader>();
+   if (!r.ok || !nucleo_.CargarShader(*shader, r.dksh, "salida (rampa)")) {
+-    REXLOG_ERROR("[deko3d] no se pudo compilar la variante {} del pixel shader de la salida: {}", variante, r.log);
++    REXLOG_ERROR("[deko3d] could not compile variant {} of the output pixel shader: {}", variante, r.log);
+     return nullptr;
+   }
+-  REXLOG_INFO("[deko3d] salida: variante {} (exacta {}, graduacion {}, FXAA {}) compilada en {:.1f} ms", variante,
++  REXLOG_INFO("[deko3d] output: variant {} (exact {}, grading {}, FXAA {}) compiled in {:.1f} ms", variante,
+               (variante & kRampaExacta) != 0, (variante & kRampaGraduacion) != 0, (variante & kRampaFxaa) != 0,
+               double(deko::AhoraNs() - inicio) / 1e6);
+   rampas_[variante] = std::move(shader);
+@@ -1724,7 +1724,7 @@ bool RenderDk::PintarSalida(DkImage& salida, uint32_t ancho_salida, uint32_t alt
+   const bool fxaa = hooks_.Fxaa();
+   if (fxaa != fxaa_anotado_) {
+     fxaa_anotado_ = fxaa;
+-    REXLOG_INFO("[deko3d] antialiasing en la salida: {}", fxaa ? "FXAA" : "ninguno");
++    REXLOG_INFO("[deko3d] output antialiasing: {}", fxaa ? "FXAA" : "ninguno");
+   }
+   const DkShader* fs = ShaderRampa((exacta ? kRampaExacta : 0) | (graduacion_ ? kRampaGraduacion : 0) |
+                                    (fxaa ? kRampaFxaa : 0));
+@@ -1848,7 +1848,7 @@ bool RenderDk::Presentar(rex::ui::Presenter* presentador, const TexturaSwap& swa
+   const uint32_t ancho_origen = desde_destino ? frontal_.ancho : (origen ? origen->ancho : 0);
+   const uint32_t alto_origen = desde_destino ? frontal_.alto : (origen ? origen->alto : 0);
+   if (!origen) {
+-    Rechazar(4, "Swap sin textura resuelta");
++    Rechazar(4, "Swap without a resolved texture");
+   } else if (presentador) {
+     const uint32_t w = std::min(ancho ? ancho : ancho_origen, ancho_origen);
+     const uint32_t h = std::min(alto ? alto : alto_origen, alto_origen);
+@@ -1912,7 +1912,7 @@ void RenderDk::GuardarCacheSiHaceFalta(bool ya) {
+       std::ofstream f(temporal, std::ios::binary | std::ios::trunc);
+       f.write(reinterpret_cast<const char*>(datos->data()), std::streamsize(datos->size()));
+       if (!f) {
+-        REXLOG_WARN("[deko3d] no se pudo escribir {}", temporal.string());
++        REXLOG_WARN("[deko3d] could not write {}", temporal.string());
+         return;
+       }
+     }
+@@ -1921,7 +1921,7 @@ void RenderDk::GuardarCacheSiHaceFalta(bool ya) {
+       std::filesystem::remove(ruta, error);
+       std::filesystem::rename(temporal, ruta, error);
+     }
+-    REXLOG_INFO("[deko3d] cache de DKSH guardada: {} entradas, {} KB", entradas, datos->size() >> 10);
++    REXLOG_INFO("[deko3d] DKSH cache saved: {} entries, {} KB", entradas, datos->size() >> 10);
+   };
+   // One write at a time, on a thread that is joined, never detached: libnx has no pthread_detach, and
+   // std::thread::detach() throws (std::system_error, "Function not implemented") and ends the process.
+@@ -1987,12 +1987,12 @@ void RenderDk::InformePeriodico() {
+   const uint64_t dibujos = dibujados_ - informe_dibujos_;
+   const deko::EstadisticasNucleo n = nucleo_.TomarEstadisticas();
+   X360_INFORME(
+-      "[deko3d] ultimos {:.0f} s: {:.1f} fotogramas/s, {:.0f} dibujos por fotograma ({} rechazados en total); GPU "
+-      "{:.2f} ms por fotograma ({} trabajos medidos); por fotograma: {:.1f} copias, {:.1f} borrados, {:.1f} barreras de transferencia, {:.2f} MB de subida (vertices, "
+-      "indices, constantes, texturas); grabar un dibujo {:.2f} us en RenderDk (sin esperas a la GPU); texturas: {} vivas ({} MB), {} creadas "
+-      "y {} subidas ({} MB) en el intervalo; lecturas de vuelta al invitado {}; {} trabajos, {} cambios de ranura por "
+-      "subida llena en total, comandos max {} KB; imagenes {} MB en {} trozos; shaders: {} de la cache, {} compilados "
+-      "en el acto, {} en segundo plano (en total)",
++      "[deko3d] last {:.0f} s: {:.1f} frames/s, {:.0f} draws per frame ({} rejected in total); GPU "
++      "{:.2f} ms per frame ({} jobs measured); per frame: {:.1f} copies, {:.1f} clears, {:.1f} transfer barriers, {:.2f} MB uploaded (vertices, "
++      "indices, constants, textures); recording a draw {:.2f} us in RenderDk (no GPU waits); textures: {} live ({} MB), {} created "
++      "and {} uploaded ({} MB) in the interval; read-backs to the guest {}; {} jobs, {} slot changes on "
++      "full upload in total, commands max {} KB; images {} MB in {} chunks; shaders: {} from the cache, {} compiled "
++      "on the spot, {} in the background (in total)",
+       segundos, fotogramas / segundos, double(dibujos) / fotogramas, rechazados_,
+       double(gpu_ns_ - informe_gpu_ns_) / 1e6 / fotogramas, gpu_trabajos_ - informe_gpu_trabajos_,
+       double(copias_ - informe_copias_) / fotogramas,
+@@ -2006,64 +2006,64 @@ void RenderDk::InformePeriodico() {
+       compilados_en_el_acto_, compilados_en_fondo_);
+   const auto ms = [&](uint32_t c) { return double(gpu_categorias_ns_[c] - informe_categorias_[c]) / 1e6 / fotogramas; };
+   X360_INFORME(
+-      "[deko3d] por fotograma: GPU sombras {:.2f} ms, escena {:.2f}, reflejo {:.2f}, 320 {:.2f}, menores {:.2f}, copias "
+-      "{:.2f}, borrados {:.2f}, resto {:.2f}, escena sin profundidad {:.2f}, GPU parada entre trabajos {:.2f}; el anillo "
+-      "espero a la GPU {:.2f} ms; borrados saltados {:.1f}; dibujos con Z temprana {:.0f}",
++      "[deko3d] per frame: GPU shadows {:.2f} ms, scene {:.2f}, reflection {:.2f}, 320 {:.2f}, minor {:.2f}, copies "
++      "{:.2f}, clears {:.2f}, rest {:.2f}, scene without depth {:.2f}, GPU idle between jobs {:.2f}; the ring "
++      "waited for the GPU {:.2f} ms; clears skipped {:.1f}; draws with early Z {:.0f}",
+       ms(kGpuSombras), ms(kGpuEscena), ms(kGpuReflejo), ms(kGpu320), ms(kGpuMenores), ms(kGpuCopias), ms(kGpuBorrados),
+       ms(kGpuOtros), ms(kGpuEscenaSinProfundidad), ms(kGpuHuecoEntreTrabajos),
+       double(nucleo_.NsEsperandoValla() - informe_espera_ns_) / 1e6 / fotogramas,
+       double(borrados_saltados_ - informe_saltados_) / fotogramas,
+       double(dibujos_z_temprana_ - informe_z_temprana_) / fotogramas);
+   const auto us = [&](uint32_t e) { return dibujos ? double(ns_etapas_[e] - informe_etapas_[e]) / double(dibujos) / 1e3 : 0.0; };
+-  static constexpr const char* kFasesSm[3] = {"mirando", "APLICANDO", "apagada"};
++  static constexpr const char* kFasesSm[3] = {"watching", "APPLYING", "off"};
+   X360_INFORME(
+-      "[deko3d] por fotograma: {:.2f} intercambios en vez de copias, {:.2f} restauraciones, {:.2f} cubos con caras "
+-      "resueltas, {:.2f} cielos aplazados (guardia {}), {:.2f} MB de vertices sin copiar (repetidos en el trabajo); "
+-      "sombra por minimo: fase {}, {} ciclos ({} limpios seguidos, {} aplicados), {} diferencias; por dibujo en el "
+-      "anillo: preparar {:.2f} us, texturas {:.2f}, estado {:.2f}, vertices {:.2f}, indices {:.2f}, constantes y dibujo "
++      "[deko3d] per frame: {:.2f} swaps instead of copies, {:.2f} restores, {:.2f} cubes with faces "
++      "resolved, {:.2f} skies deferred (guard {}), {:.2f} MB of vertices not copied (repeated in the job); "
++      "min shadow: phase {}, {} cycles ({} clean in a row, {} applied), {} mismatches; per draw on the "
++      "ring: prepare {:.2f} us, textures {:.2f}, state {:.2f}, vertices {:.2f}, indices {:.2f}, constants and draw "
+       "{:.2f}",
+       double(intercambios_ - informe_intercambios_) / fotogramas,
+       double(restauraciones_ - informe_restauraciones_) / fotogramas,
+       double(cubos_refrescados_ - informe_cubos_) / fotogramas, double(cielo_aplazados_ - informe_cielos_) / fotogramas,
+-      cielo_guardia_ == kCieloAplazando ? "superada" : cielo_guardia_ == kCieloDescartado ? "descartada" : "mirando",
++      cielo_guardia_ == kCieloAplazando ? "passed" : cielo_guardia_ == kCieloDescartado ? "discarded" : "watching",
+       double(dedupe_.bytes_ahorrados() - informe_dedupe_bytes_) / 1048576.0 / fotogramas, kFasesSm[sm_fase_ % 3],
+       sm_ciclos_, sm_limpios_seguidos_, sm_ciclos_aplicados_, sm_diferencias_, us(0), us(1), us(2), us(3), us(4), us(5));
+   X360_INFORME(
+-      "[deko3d] por fotograma: {:.1f} copias en el motor 3D, {:.1f} barreras de fragmentos, {:.2f} frontales pintados "
+-      "desde su destino sin copiar ({} copiados en total, {}), {:.2f} bandas borradas; constantes por diferencias: "
+-      "{:.1f} registros y {:.1f} empujes por dibujo",
++      "[deko3d] per frame: {:.1f} copies on the 3D engine, {:.1f} fragment barriers, {:.2f} front buffers painted "
++      "from their target without copying ({} copied in total, {}), {:.2f} bands cleared; constants by difference: "
++      "{:.1f} registers and {:.1f} pushes per draw",
+       double(copias_3d_ - informe_copias_3d_) / fotogramas,
+       double(barreras_fragmentos_ - informe_barreras_fragmentos_) / fotogramas,
+       double(frontales_ahorrados_ - informe_frontales_) / fotogramas, frontales_copiados_,
+-      frontal_apagado_ ? "APAGADO por una lectura tardia" : "activo", double(bandas_completadas_ - informe_bandas_) / fotogramas,
++      frontal_apagado_ ? "OFF due to a late read" : "on", double(bandas_completadas_ - informe_bandas_) / fotogramas,
+       dibujos ? double(registros_empujados_ - informe_registros_empujados_) / double(dibujos) : 0.0,
+       dibujos ? double(empujes_ - informe_empujes_) / double(dibujos) : 0.0);
+   X360_INFORME(
+-      "[deko3d] comprobacion de texturas: por fotograma {:.2f} MB leidos para sus huellas, {:.2f} MB ahorrados por "
+-      "muestreo ({:.1f} recomprobaciones solo con la muestra), {:.1f} aplazadas por el presupuesto; muestreo {} ({} "
+-      "con las dos huellas, {} muestras distintas en total); {:.0f} % de los dibujos reusan las texturas del anterior",
++      "[deko3d] texture checks: per frame {:.2f} MB read for their hashes, {:.2f} MB saved by "
++      "sampling ({:.1f} rechecks with the sample only), {:.1f} deferred by the budget; sampling {} ({} "
++      "with both hashes, {} distinct samples in total); {:.0f} % of draws reuse the previous one's textures",
+       double(bytes_huella_ - informe_bytes_huella_) / 1048576.0 / fotogramas,
+       double(bytes_ahorrados_muestra_ - informe_bytes_ahorrados_muestra_) / 1048576.0 / fotogramas,
+       double(muestras_aciertos_ - informe_muestras_aciertos_) / fotogramas,
+       double(huellas_aplazadas_ - informe_huellas_aplazadas_) / fotogramas,
+-      muestreo_huellas_ > 0 ? "activo" : muestreo_huellas_ == 0 ? "APAGADO" : "sin empezar", muestras_comprobadas_,
++      muestreo_huellas_ > 0 ? "on" : muestreo_huellas_ == 0 ? "OFF" : "not started", muestras_comprobadas_,
+       muestras_distintas_, dibujos ? 100.0 * double(texturas_reusadas_ - informe_texturas_reusadas_) / double(dibujos) : 0.0);
+   if (geometria_.activo()) {
+     const deko::AlmacenGeometria::Estadisticas& g = geometria_.estadisticas();
+     const deko::AlmacenGeometria::Estadisticas& a = informe_geometria_;
+     const auto mb = [&](uint64_t ahora_b, uint64_t antes_b) { return double(ahora_b - antes_b) / 1048576.0 / fotogramas; };
+     X360_INFORME(
+-        "[deko3d] geometria entre fotogramas: por fotograma {:.2f} MB sin copiar ({:.0f} de {:.0f} consultas), {:.2f} MB "
+-        "con huella, {:.3f} MB guardados ({:.1f} rangos), {:.1f} cambios, {:.1f} al anillo sin huella (cambiantes); "
+-        "{} MB de {} usados, {} rangos conocidos; {} desalojos, {} sin sitio, {} colisiones (en el intervalo); "
+-        "muestreo {}: {:.0f} comprobaciones por muestra por fotograma, {} desacuerdos en total",
++        "[deko3d] geometry between frames: per frame {:.2f} MB not copied ({:.0f} of {:.0f} lookups), {:.2f} MB "
++        "hashed, {:.3f} MB stored ({:.1f} ranges), {:.1f} changes, {:.1f} to the ring without hash (changing); "
++        "{} MB of {} used, {} known ranges; {} evictions, {} without room, {} collisions (in the interval); "
++        "sampling {}: {:.0f} sampled checks per frame, {} disagreements in total",
+         mb(g.bytes_aciertos, a.bytes_aciertos), double(g.aciertos - a.aciertos) / fotogramas,
+         double(g.consultas - a.consultas) / fotogramas, mb(g.bytes_huella, a.bytes_huella),
+         mb(g.bytes_admitidos, a.bytes_admitidos), double(g.admitidas - a.admitidas) / fotogramas,
+         double(g.cambios - a.cambios) / fotogramas, double(g.volatiles - a.volatiles) / fotogramas,
+         geometria_.bytes_usados() >> 20, geometria_.bytes_total() >> 20, geometria_.entradas(),
+         g.desalojos - a.desalojos, g.sin_sitio - a.sin_sitio, g.colisiones - a.colisiones,
+-        geometria_.muestreo() ? (g.muestreos > 20000 ? "activo" : "con la guardia") : "APAGADO",
++        geometria_.muestreo() ? (g.muestreos > 20000 ? "on" : "under the guard") : "OFF",
+         double(g.muestreos - a.muestreos) / fotogramas, g.desacuerdos);
+   }
+   tomar();
+@@ -2101,9 +2101,9 @@ void RenderDk::PerfilAlCambiarDeFotograma() {
+ 
+ void RenderDk::InformeDelPerfil() {
+   dkMemBlockFlushCpuCache(perfil_bloque_, 0, uint32_t(perfil_marcas_.size()) * 32);
+-  static constexpr const char* kCategorias[kGpuCategorias] = {"otros",   "sombras", "escena",  "reflejo",
+-                                                              "320",     "menores", "copias",  "borrados",
+-                                                              "escena sin Z", "hueco"};
++  static constexpr const char* kCategorias[kGpuCategorias] = {"other",   "shadows", "scene",  "reflection",
++                                                              "320",     "minor", "copies",  "clears",
++                                                              "scene without Z", "idle"};
+   struct Suma {
+     double ns = 0;
+     uint32_t dibujos = 0;
+@@ -2150,12 +2150,12 @@ void RenderDk::InformeDelPerfil() {
+   std::string categorias;
+   for (uint32_t c = 0; c < kGpuCategorias; ++c) {
+     if (por_categoria[c].dibujos) {
+-      categorias += fmt::format("{}{} {:.2f} ms en {} dibujos", categorias.empty() ? "" : ", ", kCategorias[c],
++      categorias += fmt::format("{}{} {:.2f} ms in {} draws", categorias.empty() ? "" : ", ", kCategorias[c],
+                                 por_categoria[c].ns / 1e6, por_categoria[c].dibujos);
+     }
+   }
+-  REXLOG_INFO("[deko3d] perfil GPU del fotograma {}: {} dibujos medidos uno a uno, {:.2f} ms dentro de los dibujos "
+-              "({} pases); por categoria: {}",
++  REXLOG_INFO("[deko3d] GPU profile of frame {}: {} draws measured one by one, {:.2f} ms inside the draws "
++              "({} passes); by category: {}",
+               perfil_fotograma_, perfil_marcas_.size(), total / 1e6, pases.size(), categorias);
+   // The passes that cost most, in frame order within the top.
+   std::vector<const Pase*> orden_pases;
+@@ -2165,8 +2165,8 @@ void RenderDk::InformeDelPerfil() {
+   std::sort(orden_pases.begin(), orden_pases.end(), [](const Pase* a, const Pase* b) { return a->suma.ns > b->suma.ns; });
+   for (size_t i = 0; i < std::min<size_t>(orden_pases.size(), 12); ++i) {
+     const Pase& p = *orden_pases[i];
+-    REXLOG_INFO("[deko3d] perfil GPU: pase {} del fotograma ({}, {}x{}, color {:016X}, Z {:016X}): {:.2f} ms, {} "
+-                "dibujos, {} vertices o indices",
++    REXLOG_INFO("[deko3d] GPU profile: pass {} of the frame ({}, {}x{}, color {:016X}, Z {:016X}): {:.2f} ms, {} "
++                "draws, {} vertices or indices",
+                 p.orden, kCategorias[std::min<uint32_t>(p.categoria, kGpuCategorias - 1)], p.ancho, p.alto, p.color,
+                 p.profundidad, p.suma.ns / 1e6, p.suma.dibujos, p.suma.vertices);
+   }
+@@ -2195,9 +2195,9 @@ void RenderDk::InformeDelPerfil() {
+     for (size_t j = i + 1; j < perfil_marcas_.size() && perfil_marcas_[j].repeticion; ++j) {
+       pruebas += fmt::format("; {} {:.2f} ms", kVeces[std::min<uint32_t>(perfil_marcas_[j].repeticion, 4)], ms_de(j));
+     }
+-    REXLOG_INFO("[deko3d] perfil GPU: dibujo {} ({:.2f} ms): PS {:016X} (n{}), pase {} {}x{}, viewport {:.0f}x{:.0f}, "
+-                "tijera {}x{}, mascaras {:04X}, RB_DEPTHCONTROL {:08X}, {} vertices o indices; {} texturas, la primera "
+-                "{}x{} formato {} sampler {}{}",
++    REXLOG_INFO("[deko3d] GPU profile: draw {} ({:.2f} ms): PS {:016X} (n{}), pass {} {}x{}, viewport {:.0f}x{:.0f}, "
++                "scissor {}x{}, masks {:04X}, RB_DEPTHCONTROL {:08X}, {} vertices or indices; {} textures, the first "
++                "{}x{} format {} sampler {}{}",
+                 i, dibujos[k].first, it != datos_shaders_.end() ? it->second.huella : 0,
+                 it != datos_shaders_.end() ? it->second.numero : 0,
+                 kCategorias[std::min<uint32_t>(m.categoria, kGpuCategorias - 1)], m.ancho, m.alto, m.vp_ancho,
+@@ -2211,8 +2211,8 @@ void RenderDk::InformeDelPerfil() {
+       const auto& [shader, suma] = lista[i];
+       const auto it = datos_shaders_.find(shader);
+       const DatosShaderDk d = it != datos_shaders_.end() ? it->second : DatosShaderDk{};
+-      REXLOG_INFO("[deko3d] perfil GPU: {} {:016X} (n{}, espec {:08X}, variante {:X}): {:.2f} ms en {} dibujos ({:.1f} "
+-                  "us por dibujo, {} vertices o indices); uam: {} registros, {} bytes de codigo, scratch {}",
++      REXLOG_INFO("[deko3d] GPU profile: {} {:016X} (n{}, spec {:08X}, variant {:X}): {:.2f} ms in {} draws ({:.1f} "
++                  "us per draw, {} vertices or indices); uam: {} registers, {} bytes of code, scratch {}",
+                   que, d.huella, d.numero, d.espec, d.variante, suma.ns / 1e6, suma.dibujos,
+                   suma.dibujos ? suma.ns / 1e3 / suma.dibujos : 0.0, suma.vertices, d.registros, d.bytes_codigo,
+                   d.scratch);
+diff --git a/src/x360/deko/dibujos.cpp b/src/x360/deko/dibujos.cpp
+index e3fb6f1..88c3535 100644
+--- a/src/x360/deko/dibujos.cpp
++++ b/src/x360/deko/dibujos.cpp
+@@ -465,7 +465,7 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+   entrada.remapeos.fill(kRemapeoIdentidad);
+   const auto& parcheado = p.vs_microcodigo;
+   if (parcheado.size() != vs.microcodigo.size()) {
+-    return Rechazar(20, "el VS del anillo no tiene la longitud del contenedor");
++    return Rechazar(20, "the ring's VS does not have the container's length");
+   }
+   for (DkVtxAttribState& a : entrada.atributos) {
+     a = Ceros<DkVtxAttribState>();
+@@ -492,7 +492,7 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+       }
+     }
+     if (q == SIZE_MAX) {
+-      return Rechazar(21, "fetch de vertices no encontrado en el VS parcheado");
++      return Rechazar(21, "vertex fetch not found in the patched VS");
+     }
+     const uint32_t d0 = parcheado[q], d1 = parcheado[q + 1], d2 = parcheado[q + 2];
+     const uint32_t ranura = ((d0 >> 20) & 0x1F) * 3 + ((d0 >> 25) & 0x3);
+@@ -501,7 +501,7 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+     const int32_t offset = (int32_t(d2 << 1) >> 9) * 4;
+     const int32_t ubicacion = UbicacionDeUso(elemento.uso, elemento.indice_uso);
+     if (ubicacion < 0 || ubicacion >= 16 || ((ubicaciones_usadas >> ubicacion) & 0x1)) {
+-      Avisar(22, "elemento de vertices sin ubicacion libre en el shader: se omite");
++      Avisar(22, "vertex element with no free location in the shader: skipped");
+       continue;
+     }
+     DkVtxAttribSize tamano;
+@@ -509,13 +509,13 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+     bool r11g11b10 = false;
+     if (!AtributoDe(formato, EntradaEntera(elemento.uso), (d1 >> 12) & 0x1, (d1 >> 13) & 0x1, tamano, tipo,
+                     r11g11b10)) {
+-      return Rechazar(300 + formato, "formato de vertice todavia no soportado");
++      return Rechazar(300 + formato, "vertex format not supported yet");
+     }
+     if (r11g11b10) {
+       entrada.especializacion |= 0x1;
+     }
+     if (offset < 0 || offset >= (1 << 14)) {
+-      return Rechazar(24, "offset de vertice negativo o demasiado grande");
++      return Rechazar(24, "vertex offset negative or too large");
+     }
+     uint32_t enlace = 0;
+     while (enlace < entrada.enlaces.size() && entrada.enlaces[enlace].ranura != ranura) {
+@@ -523,7 +523,7 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+     }
+     if (enlace == entrada.enlaces.size()) {
+       if (enlace >= 16) {
+-        return Rechazar(9, "demasiados streams de vertices");
++        return Rechazar(9, "too many vertex streams");
+       }
+       entrada.enlaces.push_back({ranura, zancada});
+     } else if (!entrada.enlaces[enlace].zancada) {
+@@ -543,7 +543,7 @@ bool RenderDk::CalcularEntrada(const PeticionDibujo& p, EntradaVerticesDk& entra
+   }
+   for (size_t b = 0; b < entrada.enlaces.size(); ++b) {
+     if (!entrada.enlaces[b].zancada) {
+-      return Rechazar(25, "stream de vertices sin zancada");
++      return Rechazar(25, "vertex stream without stride");
+     }
+     entrada.estado_bufers[b] = {entrada.enlaces[b].zancada, 0};
+   }
+@@ -581,7 +581,7 @@ uint32_t RenderDk::CalcularEncuadre(const uint32_t* r, uint32_t vte, bool sin_re
+   viewport[1] = centro_y + escala_y;
+   viewport[3] = -2.0f * escala_y;
+   if (!((r[gr::XE_GPU_REG_PA_CL_CLIP_CNTL] >> 19) & 0x1)) {
+-    Avisar(14, "espacio de recorte OpenGL (dx_clip_space_def = 0): Z sin ajustar");
++    Avisar(14, "OpenGL clip space (dx_clip_space_def = 0): Z not adjusted");
+   }
+   viewport[4] = std::clamp(centro_z, 0.0f, 1.0f);
+   viewport[5] = std::clamp(centro_z + escala_z, 0.0f, 1.0f);
+@@ -642,14 +642,14 @@ bool RenderDk::EmpezarPase(const uint64_t claves[5], uint32_t pitch) {
+     if (claves[i]) {
+       imagenes[i] = DestinoColor(uint32_t(claves[i] >> 24) & 0xFFF, uint32_t(claves[i] >> 16) & 0xF, pitch);
+       if (!imagenes[i]) {
+-        return Rechazar(40, "no hay destino de color");
++        return Rechazar(40, "no color target");
+       }
+     }
+   }
+   if (claves[4]) {
+     imagenes[4] = DestinoProfundidad(uint32_t(claves[4] >> 24) & 0xFFF, uint32_t(claves[4] >> 16) & 0x1, pitch);
+     if (!imagenes[4]) {
+-      return Rechazar(41, "no hay destino de profundidad");
++      return Rechazar(41, "no depth target");
+     }
+   }
+   // A target whose content a resolve without copy gave away gets it back before it is drawn on (the shadow map's car
+@@ -816,12 +816,12 @@ void RenderDk::CerrarFotogramaDeLaGuardiaDelCielo() {
+   }
+   if (cielo_guardia_max_ == 1 && cielo_guardia_con_uno_ >= kCieloFotogramasPrueba) {
+     cielo_guardia_ = kCieloAplazando;
+-    REXLOG_INFO("[deko3d] cielo: guardia SUPERADA ({} fotogramas con exactamente un domo, nunca dos); se aplaza el "
+-                "cielo de la escena a partir de ahora",
++    REXLOG_INFO("[deko3d] sky: guard PASSED ({} frames with exactly one dome, never two); deferring the "
++                "scene's sky from now on",
+                 cielo_guardia_con_uno_);
+   } else {
+     cielo_guardia_ = kCieloDescartado;
+-    REXLOG_WARN("[deko3d] cielo: guardia NO superada (maximo {} domos en un fotograma, {} de {} con uno); no se "
++    REXLOG_WARN("[deko3d] sky: guard NOT passed (max {} domes in a frame, {} of {} with one); not "
+                 "aplaza nada",
+                 cielo_guardia_max_, cielo_guardia_con_uno_, cielo_guardia_fotogramas_);
+   }
+@@ -949,7 +949,7 @@ const DkShader* RenderDk::ShaderDe(const EntradaShader& entrada, uint32_t especi
+   const uint64_t inicio = deko::AhoraNs();
+   deko::GlslDeko g = deko::SpirvAGlsl(espirv, espec, entrada.vertices ? variante : kTodasLasSalidas);
+   if (g.glsl.empty()) {
+-    REXLOG_ERROR("[deko3d] {}: no se pudo pasar a GLSL: {}", nombre, g.error);
++    REXLOG_ERROR("[deko3d] {}: could not convert to GLSL: {}", nombre, g.error);
+     cargados_.emplace(clave, nullptr);
+     return nullptr;
+   }
+@@ -964,7 +964,7 @@ const DkShader* RenderDk::ShaderDe(const EntradaShader& entrada, uint32_t especi
+   }
+   ++compilados_en_el_acto_;
+   if (compilados_en_el_acto_ <= 64) {
+-    REXLOG_INFO("[deko3d] {} compilado en el acto en {:.1f} ms ({} bytes de DKSH)", nombre,
++    REXLOG_INFO("[deko3d] {} compiled on the spot in {:.1f} ms ({} bytes of DKSH)", nombre,
+                 double(deko::AhoraNs() - inicio) / 1e6, r.dksh.size());
+   }
+   cache_.Anadir(clave_cache, r.dksh);
+@@ -987,7 +987,7 @@ void RenderDk::RecogerCompilaciones() {
+     cache_sucia_ = true;
+   }
+   if (fallidas) {
+-    REXLOG_WARN("[deko3d] {} compilaciones en segundo plano fallidas (se sigue con la variante completa)", fallidas);
++    REXLOG_WARN("[deko3d] {} background compilations failed (keeping the full variant)", fallidas);
+   }
+ }
+ 
+@@ -1017,7 +1017,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+   // --- Primitive
+   const uint32_t modo_edram = r[gr::XE_GPU_REG_RB_MODECONTROL] & 0x7;
+   if (modo_edram != uint32_t(xenos::EdramMode::kColorDepth) && modo_edram != 5) {
+-    return Rechazar(1, "modo EDRAM sin color ni profundidad");
++    return Rechazar(1, "EDRAM mode with neither color nor depth");
+   }
+   // Mode 5 (depth only): the Xenos does not run the pixel shader.
+   const EntradaShader* ps = modo_edram == uint32_t(xenos::EdramMode::kColorDepth) ? p.ps : nullptr;
+@@ -1060,7 +1060,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+       primitiva = DkPrimitive_Quads;  // native (the Vulkan backend makes triangle lists of them)
+       break;
+     default:
+-      return Rechazar(100 + tipo, "tipo de primitiva todavia no soportado");
++      return Rechazar(100 + tipo, "primitive type not supported yet");
+   }
+   if (fuente == uint32_t(xenos::SourceSelect::kImmediate)) {
+     return Rechazar(2, "indices inmediatos");
+@@ -1068,7 +1068,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+   const bool sin_recorte = (r[gr::XE_GPU_REG_PA_CL_CLIP_CNTL] >> 16) & 0x1;
+   const uint32_t modo_sc = r[gr::XE_GPU_REG_PA_SU_SC_MODE_CNTL];
+   if (((modo_sc >> 3) & 0x3) == 2 && ((modo_sc >> 5) & 0x7) != 2) {
+-    return Rechazar(4, "poligonos dibujados como puntos o lineas");
++    return Rechazar(4, "polygons drawn as points or lines");
+   }
+   const EntradaVerticesDk* entrada = EntradaDe(p);
+   if (!entrada) {
+@@ -1095,7 +1095,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     const uint32_t formato = (info >> 16) & 0xF;
+     if (formato != uint32_t(xenos::ColorRenderTargetFormat::k_8_8_8_8) &&
+         formato != uint32_t(xenos::ColorRenderTargetFormat::k_8_8_8_8_GAMMA)) {
+-      return Rechazar(200 + formato, "formato de destino de color todavia no soportado");
++      return Rechazar(200 + formato, "color target format not supported yet");
+     }
+     claves[i] = (uint64_t(1) << 63) | (uint64_t(info & 0xFFF) << 24) | (uint64_t(formato) << 16) | pitch;
+     mascaras |= mascara << (i * 4);
+@@ -1199,7 +1199,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     const uint32_t bytes = indices32 ? 4 : 2;
+     const uint32_t base = r[gr::XE_GPU_REG_VGT_DMA_BASE] & ~(bytes - 1);
+     if (cuenta > (tamano & 0xFFFFFF) || uint64_t(base & 0x1FFFFFFF) + uint64_t(cuenta) * bytes > kMemoriaFisica) {
+-      return Rechazar(7, "indices fuera de su bufer");
++      return Rechazar(7, "indices outside their buffer");
+     }
+     const uint8_t* datos = memoria_->TranslatePhysical(base & 0x1FFFFFFF);
+     indices_datos = datos;
+@@ -1244,7 +1244,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     vmax = desplazamiento + cuenta - 1;
+   }
+   if (vmax - vmin >= kMaxVerticesPorDibujo) {
+-    return Rechazar(8, "rango de vertices demasiado grande");
++    return Rechazar(8, "vertex range too large");
+   }
+   const uint32_t vertices = vmax - vmin + 1;
+ 
+@@ -1261,18 +1261,18 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     const uint32_t d0 = r[kRegFetch + enlace.ranura * 2];
+     const uint32_t d1 = r[kRegFetch + enlace.ranura * 2 + 1];
+     if ((d0 & 0x3) != uint32_t(xenos::FetchConstantType::kVertex)) {
+-      return Rechazar(10, "fetch constant de vertices invalida");
++      return Rechazar(10, "invalid vertex fetch constant");
+     }
+     const uint64_t direccion = uint64_t(d0 & 0x1FFFFFFC);
+     const uint64_t disponibles = uint64_t((d1 >> 2) & 0xFFFFFF) * 4;
+     const uint64_t inicio = uint64_t(vmin) * enlace.zancada;
+     uint64_t necesarios = uint64_t(vertices) * enlace.zancada;
+     if (inicio + necesarios > disponibles) {
+-      Avisar(11, "vertices mas alla del final de su bufer: se recorta");
++      Avisar(11, "vertices past the end of their buffer: clipped");
+       necesarios = disponibles > inicio ? (disponibles - inicio) / enlace.zancada * enlace.zancada : 0;
+     }
+     if (!necesarios || direccion + inicio + necesarios > kMemoriaFisica) {
+-      return Rechazar(12, "vertices fuera de la memoria");
++      return Rechazar(12, "vertices outside memory");
+     }
+     origenes[b] = {memoria_->TranslatePhysical(uint32_t(direccion + inicio)), static_cast<xenos::Endian>(d1 & 0x3),
+                    uint32_t(necesarios)};
+@@ -1396,7 +1396,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+                               std::max(bytes_vs, kUboBytesVs) + std::max(bytes_ps, kUboBytesPs) + kUboBytesCompartidas;
+   const uint32_t rebanada = nucleo_.config().mb_subida << 20;
+   if (necesarios > rebanada) {
+-    return Rechazar(13, "dibujo mayor que el anillo de subida");
++    return Rechazar(13, "draw larger than the upload ring");
+   }
+   if (nucleo_.SubidaLibre() < necesarios) {
+     CambiarDeRanura();
+@@ -1538,7 +1538,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+                             con_indices && n_indices == kIndicesDomoCielo && dibujos_en_pase_ == 0;
+     if (es_el_domo && ++cielo_guardia_en_fotograma_ > 1 && cielo_guardia_ != kCieloDescartado) {
+       cielo_guardia_ = kCieloDescartado;
+-      REXLOG_WARN("[deko3d] cielo: la guardia ve {} domos en el MISMO fotograma; no se aplaza nada en la sesion",
++      REXLOG_WARN("[deko3d] sky: the guard sees {} domes in the SAME frame; nothing deferred this session",
+                   cielo_guardia_en_fotograma_);
+     }
+     static const bool aplazar_cielo = REXCVAR_GET(nfsmw_nativo_cielo_aplazado);
+@@ -1553,7 +1553,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+   const DkShader* vs = ShaderDe(*p.vs, especializacion, ps ? InfoDe(*ps).interpoladores : 0u);
+   const DkShader* fs = ps ? ShaderDe(*ps, especializacion, 0, variante_ps) : (fs_vacio_valido_ ? &fs_vacio_ : nullptr);
+   if (!vs || !fs) {
+-    return Rechazar(60, "shader sin DKSH");
++    return Rechazar(60, "shader without DKSH");
+   }
+   nucleo_.InvalidarCodigoSiHaceFalta();  // code copied in the middle of a frame (rex/ui/deko3d/nucleo.h)
+   if (vs != g_.vs || fs != g_.ps) {
+@@ -1760,7 +1760,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     }
+     const deko::Subida s = nucleo_.Reservar(origen.bytes, 16);
+     if (!s) {
+-      return Rechazar(13, "sin sitio en el anillo de subida");
++      return Rechazar(13, "no room in the upload ring");
+     }
+     CopiarVertices(TrabajoCopia{origen.datos, s.cpu, origen.bytes / 4, origen.orden});
+     dedupe_.Anotar(direccion, origen.bytes, uint32_t(origen.orden), uint64_t(s.gpu));
+@@ -1782,7 +1782,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+     } else {
+       const deko::Subida s = nucleo_.Reservar(bytes_indices, 16);
+       if (!s) {
+-        return Rechazar(13, "sin sitio en el anillo de subida");
++        return Rechazar(13, "no room in the upload ring");
+       }
+       uint32_t minimo, maximo;
+       if (indices_de_16) {
+@@ -1806,7 +1806,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+       const deko::Subida f = nucleo_.Reservar(kUboBytesPs, DK_UNIFORM_BUF_ALIGNMENT);
+       const deko::Subida c = nucleo_.Reservar(kBloqueCompartidas, DK_UNIFORM_BUF_ALIGNMENT);
+       if (!v || !f || !c) {
+-        return Rechazar(13, "sin sitio en el anillo de subida");
++        return Rechazar(13, "no room in the upload ring");
+       }
+       std::memcpy(v.cpu, r + kRegConstantesVs, kUboBytesVs);
+       std::memcpy(sombra_vs_.data(), r + kRegConstantesVs, kUboBytesVs);
+@@ -1871,7 +1871,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+   if (constantes_vs_generacion_ != p.generacion_constantes_vs || bytes_vs > constantes_vs_bytes_) {
+     const deko::Subida s = nucleo_.Reservar(std::max(bytes_vs, kUboBytesVs), DK_UNIFORM_BUF_ALIGNMENT);
+     if (!s) {
+-      return Rechazar(13, "sin sitio en el anillo de subida");
++      return Rechazar(13, "no room in the upload ring");
+     }
+     std::memcpy(s.cpu, r + kRegConstantesVs, bytes_vs);
+     constantes_vs_gpu_ = s.gpu;
+@@ -1881,7 +1881,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+   if (ps && (constantes_ps_generacion_ != p.generacion_constantes_ps || bytes_ps > constantes_ps_bytes_)) {
+     const deko::Subida s = nucleo_.Reservar(std::max(bytes_ps, kUboBytesPs), DK_UNIFORM_BUF_ALIGNMENT);
+     if (!s) {
+-      return Rechazar(13, "sin sitio en el anillo de subida");
++      return Rechazar(13, "no room in the upload ring");
+     }
+     std::memcpy(s.cpu, r + kRegConstantesPs, bytes_ps);
+     constantes_ps_gpu_ = s.gpu;
+@@ -1892,7 +1892,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+       std::memcmp(compartidas, compartidas_previas_, sizeof(compartidas)) != 0) {
+     const deko::Subida s = nucleo_.Reservar(kUboBytesCompartidas, DK_UNIFORM_BUF_ALIGNMENT);
+     if (!s) {
+-      return Rechazar(13, "sin sitio en el anillo de subida");
++      return Rechazar(13, "no room in the upload ring");
+     }
+     std::memcpy(s.cpu, compartidas, sizeof(compartidas));
+     std::memcpy(compartidas_previas_, compartidas, sizeof(compartidas));
+@@ -2014,7 +2014,7 @@ bool RenderDk::Dibujar(const PeticionDibujo& p) {
+         std::memcpy(v, r + kRegConstantesPs + i * 4, sizeof(v));
+         c += fmt::format(" c{}=({:.5g},{:.5g},{:.5g},{:.5g})", i, v[0], v[1], v[2], v[3]);
+       }
+-      REXLOG_INFO("[deko3d] perfil GPU: constantes del PS n{} en su primera prueba de variantes:{}", ps->numero, c);
++      REXLOG_INFO("[deko3d] GPU profile: constants of PS n{} in its first variant test:{}", ps->numero, c);
+     }
+     ++dibujos_en_pase_;
+   }
+diff --git a/src/x360/deko/geometria.cpp b/src/x360/deko/geometria.cpp
+index 11aa12f..859271d 100644
+--- a/src/x360/deko/geometria.cpp
++++ b/src/x360/deko/geometria.cpp
+@@ -237,8 +237,8 @@ AlmacenGeometria::Resultado AlmacenGeometria::Consultar(const uint8_t* datos, ui
+       }
+       ++estadisticas_.desacuerdos;
+       muestreo_ = false;
+-      Registro("[dk] geometria: la MUESTRA de un rango de %u bytes no vio un cambio que la huella completa si: se APAGA "
+-               "el muestreo (tras %llu comprobaciones por muestra)",
++      Registro("[dk] geometry: the SAMPLE of a %u-byte range did not see a change the full hash did: turning OFF "
++               "sampling (after %llu sampled checks)",
+                bytes, static_cast<unsigned long long>(estadisticas_.muestreos));
+     }
+     // The sample changed (or disagreed): the whole path below decides.
+diff --git a/src/x360/deko/texturas.cpp b/src/x360/deko/texturas.cpp
+index 8118904..66e1a7f 100644
+--- a/src/x360/deko/texturas.cpp
++++ b/src/x360/deko/texturas.cpp
+@@ -209,7 +209,7 @@ uint32_t RenderDk::VistaDe(const ImagenDk& imagen, uint32_t swizzle_guest, uint1
+   }
+   const uint32_t ranura = ReservarDescriptorImagen();
+   if (!ranura) {
+-    Avisar(35, "tabla de descriptores de imagenes llena");
++    Avisar(35, "image descriptor table full");
+     return 0;
+   }
+   DkImageView v;
+@@ -232,7 +232,7 @@ bool RenderDk::CrearVacias() {
+   static constexpr DkImageType kTipos[3] = {DkImageType_2D, DkImageType_3D, DkImageType_Cubemap};
+   for (uint32_t i = 0; i < 3; ++i) {
+     ImagenDk& v = vacias_[i];
+-    if (!CrearImagen(v, kTipos[i], DkImageFormat_RGBA8_Unorm, 1, 1, 1, 1, 0, "textura vacia")) {
++    if (!CrearImagen(v, kTipos[i], DkImageFormat_RGBA8_Unorm, 1, 1, 1, 1, 0, "empty texture")) {
+       return false;
+     }
+     const deko::Subida s = Reservar(4 * 6, 256);
+@@ -270,7 +270,7 @@ uint32_t RenderDk::SamplerDe(const uint32_t* f, bool puntual) {
+     return it->second;
+   }
+   if (siguiente_sampler_ >= nucleo_.config().descriptores_sampler) {
+-    Avisar(37, "tabla de samplers llena");
++    Avisar(37, "sampler table full");
+     return 0;
+   }
+   // The Vulkan backend's address modes: the halfway clamps as edge clamps, the mirrored ones as mirror-to-edge.
+@@ -397,15 +397,15 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+   const bool cubo = dimension == uint32_t(xenos::DataDimension::kCube);
+   const bool volumen = dimension == uint32_t(xenos::DataDimension::k3D);
+   if (dimension != uint32_t(xenos::DataDimension::k2DOrStacked) && !cubo && !volumen) {
+-    Avisar(30, "texturas 1D todavia no soportadas: se usa una vacia");
++    Avisar(30, "1D textures not supported yet: using an empty one");
+     return VaciaDe(tipo_shader);
+   }
+   if (TipoVolumen(tipo_shader) != volumen || TipoCubo(tipo_shader) != cubo) {
+-    Avisar(29, "la dimension de la textura no es la que declara el shader: se usa una vacia");
++    Avisar(29, "texture dimension differs from what the shader declares: using an empty one");
+     return VaciaDe(tipo_shader);
+   }
+   if ((f[0] >> 2) & 0xFF) {
+-    Avisar(31, "texturas con signo o gamma: se leen sin signo");
++    Avisar(31, "signed or gamma textures: read as unsigned");
+   }
+   const uint32_t swizzle = (f[3] >> 1) & 0xFFF;
+   const uint32_t base = (f[1] >> 12) << 12;
+@@ -427,7 +427,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+   const uint32_t formato = f[1] & 0x3F;
+   FormatoDk tf;
+   if (!FormatoDe(formato, tf)) {
+-    Avisar(400 + formato, "formato de textura todavia no soportado: se usa una vacia");
++    Avisar(400 + formato, "texture format not supported yet: using an empty one");
+     return VaciaDe(tipo_shader);
+   }
+   // size_2d: 13 + 13 bits; size_3d: 11 + 11 + 10 bits (xenos.h).
+@@ -435,7 +435,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+   const uint32_t alto = volumen ? ((f[2] >> 11) & 0x7FF) + 1 : ((f[2] >> 13) & 0x1FFF) + 1;
+   const uint32_t fondo = volumen ? ((f[2] >> 22) & 0x3FF) + 1 : 0;
+   if (volumen && tf.bloque > 1) {
+-    Avisar(38, "textura 3D comprimida: se usa una vacia");
++    Avisar(38, "compressed 3D texture: using an empty one");
+     return VaciaDe(tipo_shader);
+   }
+   const uint32_t capas = cubo ? 6 : 1;
+@@ -527,15 +527,15 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+       TexturaDk& cubo_resuelto = texturas_[clave ^ 0x9E3779B97F4A7C15ull];
+       if (!cubo_resuelto.imagen.viva) {
+         if (!CrearImagen(cubo_resuelto.imagen, DkImageType_Cubemap, DkImageFormat_RGBA8_Unorm, ancho, alto, 1, 1, 0,
+-                         "cubo de caras resueltas")) {
++                         "cube of resolved faces")) {
+           texturas_.erase(clave ^ 0x9E3779B97F4A7C15ull);
+-          Avisar(32, "no se pudo crear una textura");
++          Avisar(32, "could not create a texture");
+           return VaciaDe(tipo_shader);
+         }
+         cubo_resuelto.bytes = uint64_t(ancho) * alto * 4 * 6;
+         bytes_texturas_ += cubo_resuelto.bytes;
+         ++texturas_creadas_;
+-        REXLOG_INFO("[deko3d] cubo {:08X} {}x{} con sus caras resueltas", base, ancho, alto);
++        REXLOG_INFO("[deko3d] cube {:08X} {}x{} with its faces resolved", base, ancho, alto);
+       }
+       if (cubo_resuelto.fotograma != fotograma_) {
+         cubo_resuelto.fotograma = fotograma_;
+@@ -582,7 +582,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+     if (!CrearImagen(textura.imagen, cubo ? DkImageType_Cubemap : volumen ? DkImageType_3D : DkImageType_2D,
+                      tf.formato, ancho_host, alto_host, volumen ? fondo : 1, niveles, 0, "textura")) {
+       texturas_.erase(clave);
+-      Avisar(32, "no se pudo crear una textura");
++      Avisar(32, "could not create a texture");
+       return VaciaDe(tipo_shader);
+     }
+     for (uint32_t n = 0; n < niveles; ++n) {
+@@ -593,8 +593,8 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+     bytes_texturas_ += textura.bytes;
+     ++texturas_creadas_;
+     if (texturas_creadas_ <= 48) {
+-      REXLOG_INFO("[deko3d] textura {:08X} {}x{} formato {} {} orden {} pitch {} swizzle {:03X}{}; niveles {}", base,
+-                  ancho, alto, formato, mosaico ? "en mosaico" : "lineal", (f[1] >> 6) & 0x3,
++      REXLOG_INFO("[deko3d] texture {:08X} {}x{} format {} {} endian {} pitch {} swizzle {:03X}{}; levels {}", base,
++                  ancho, alto, formato, mosaico ? "tiled" : "lineal", (f[1] >> 6) & 0x3,
+                   ((f[0] >> 22) & 0x1FF) << 5, swizzle, cubo ? " (cubo)" : volumen ? " (3D)" : "", niveles);
+     }
+   }
+@@ -638,8 +638,8 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+         const int32_t cada = REXCVAR_GET(nfsmw_nativo_huellas_muestreo);
+         muestreo_huellas_ = cada >= 2 ? std::min<int32_t>(cada, 64) : 0;
+         presupuesto_huellas_ = uint64_t(std::max(REXCVAR_GET(nfsmw_nativo_huellas_kb_fotograma), 0)) * 1024;
+-        REXLOG_INFO("[deko3d] texturas estables: recomprobacion por muestreo {}; presupuesto {} KB por fotograma",
+-                    muestreo_huellas_ ? fmt::format("SI, 1 de cada {} completa, las {} primeras con las dos huellas",
++        REXLOG_INFO("[deko3d] stable textures: sampled recheck {}; budget {} KB per frame",
++                    muestreo_huellas_ ? fmt::format("YES, 1 in {} full, the first {} with both hashes",
+                                                     muestreo_huellas_, kMuestrasAComprobar)
+                                       : std::string("no"),
+                     presupuesto_huellas_ >> 10);
+@@ -709,11 +709,11 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+           // 0CB7D000). That address is rechecked whole from now on and the guard starts again for the rest; a
+           // fifth such texture switches sampling off for all.
+           const bool apagar = bases_sin_muestra_.size() >= kBasesSinMuestraMax;
+-          REXLOG_WARN("[deko3d] la MUESTRA de la textura {:08X} {}x{} formato {} ({} KB de base y {} KB de mips) no "
+-                      "vio un cambio que la huella completa si (tras {} recomprobaciones con las dos): {}",
++          REXLOG_WARN("[deko3d] the SAMPLE of texture {:08X} {}x{} format {} ({} KB base and {} KB mips) did not "
++                      "see a change the full hash did (after {} rechecks with both): {}",
+                       base, ancho, alto, formato, extension >> 10, extension_mips >> 10, muestras_comprobadas_,
+-                      apagar ? "se APAGA el muestreo de huellas"
+-                             : "esa direccion se comprueba siempre entera y la guardia vuelve a empezar");
++                      apagar ? "hash sampling turned OFF"
++                             : "that address is always checked in full and the guard starts over");
+           if (apagar) {
+             muestreo_huellas_ = 0;
+           } else {
+@@ -722,8 +722,8 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+           }
+           textura.muestra_valida = false;
+         } else if (muestras_comprobadas_ == kMuestrasAComprobar) {
+-          REXLOG_INFO("[deko3d] muestreo de huellas: {} recomprobaciones con las dos huellas, ningun desacuerdo; sigue "
+-                      "con 1 de cada {} completa",
++          REXLOG_INFO("[deko3d] hash sampling: {} rechecks with both hashes, no disagreement; continuing "
++                      "with 1 in {} full",
+                       muestras_comprobadas_, muestreo_huellas_);
+         }
+       }
+@@ -758,7 +758,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+   if (volumen) {
+     if (!LeerVolumen(f, tf, bloques_x, bloques_y, fondo, bloques_x_host, bloques_y_host, pitch_bloques, mosaico,
+                      temporal_.data())) {
+-      Avisar(33, "textura fuera de la memoria");
++      Avisar(33, "texture outside memory");
+       return textura.con_contenido ? ranura : VaciaDe(tipo_shader);
+     }
+     // 3D textures have no raw fingerprint: the untiled data decides.
+@@ -774,7 +774,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+       if (!LeerNivel(dir_base + c * zancada_cara, mosaico, pitch_bloques,
+                      uint64_t(std::max(pitch_bloques, bloques_x)) * tf.bytes, tf, base_ox, base_oy, bloques_x, bloques_y,
+                      bloques_x_host, temporal_.data() + bytes_capa_nivel[0] * c)) {
+-        Avisar(33, "textura fuera de la memoria");
++        Avisar(33, "texture outside memory");
+         return textura.con_contenido ? ranura : VaciaDe(tipo_shader);
+       }
+     }
+@@ -797,7 +797,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+                            temporal_.data() + desplazamiento_nivel[n] + bytes_capa_nivel[n] * c);
+       }
+       if (fuera) {
+-        Avisar(39, "nivel de mip fuera de la memoria: se queda a cero");
++        Avisar(39, "mip level outside memory: left at zero");
+         break;
+       }
+     }
+@@ -810,7 +810,7 @@ uint32_t RenderDk::PrepararTextura(const uint32_t* f, uint16_t tipo_shader, uint
+   // recorded in, and this texture's draws come after).
+   const deko::Subida subida = Reservar(uint32_t(bytes_datos), 256);
+   if (!subida) {
+-    Avisar(13, "textura mayor que el anillo de subida");
++    Avisar(13, "texture larger than the upload ring");
+     return textura.con_contenido ? ranura : VaciaDe(tipo_shader);
+   }
+   std::memcpy(subida.cpu, temporal_.data(), bytes_datos);
+@@ -860,7 +860,7 @@ void RenderDk::SoltarTexturasSiHaceFalta() {
+   }
+   if (soltadas) {
+     ++generacion_texturas_;  // the per-fetch cache may name them
+-    REXLOG_INFO("[deko3d] texturas: {} soltadas ({} MB); quedan {} ({} MB)", soltadas, bytes >> 20, texturas_.size(),
++    REXLOG_INFO("[deko3d] textures: {} released ({} MB); {} left ({} MB)", soltadas, bytes >> 20, texturas_.size(),
+                 bytes_texturas_ >> 20);
+   }
+ }

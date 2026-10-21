@@ -1,32 +1,9 @@
-# MGR Revengeance (Nvidia Shield, v40) — структура
-
-Это НЕ нативный Android-порт. Это x86 Windows-сборка PC-игры (MGRR.exe, PE32, VS2010, 23.12.2015),
-запускаемая на ARM через ExaGear (x86→ARM) + TransGaming Cedega (Wine) + свой D3D9→GLES2 драйвер.
-
-## Слои (сверху вниз)
-1. MGRR.exe (x86, PlatinumGames engine; CRI Atom/Mana/CPK/ADX, Wwise (AK::), Havok, d3d9, XInput 1.3, DInput8, WS2_32)
-2. Cedega/Wine (obb/patch: engine/bin/cedega, wineserver, engine/lib/*.so ~289 шт.; libd3dgl*.so = D3D9→GL, libwine_xaudio.so, libdsound.so)
-3. ExaGear "UBT" (armeabi-v7a: libubt*.so) — динамический бинарный транслятор + эмуляция Linux-syscalls/VFS (lkv_*), vpaths
-4. Android-обвязка: libubtlauncher.so (EGL/GLES2/OpenSL ES, TG3D драйвер ANDROIDCLIENT_TG3D*), libubtjni.so
-5. Java: MainActivity, UE3JavaDownloader* (Play Expansion), NvidiaGPGS, InputSystem, MoviePlayer, DeviceInfo
-
-## OBB
-- main.27 (4.78 ГБ, FAT32 образ): windows/ (system32 dll'ки, Fonts), MGRR/ (MGRR.exe, libmmd.dll, svml_dispmd.dll, GameData/, movie_native/*.mp4)
-- patch.40 (57 МБ, FAT16 образ): Ubuntu 12.04 i386 rootfs-срез (ld-linux.so.2, libc, libjpeg…), engine/ (cedega, wineserver, libs), transgaming/ (*.reg, config, nv_shaderstate.*), .exagear/vpaths-list
-- Распаковка: 7z не открывает main (придирается к метке тома) → scratchpad/fatx.py (свой read-only FAT-экстрактор). Результат в obb_extracted/{main,patch}
-
-## GameData
-- data000..006, data104..109.cpk — CRI CPK
-- sound/: stream*.cpk (в т.ч. DLC1-3, English(US)), Init*.bnk, Wwise*.wai, SeCollision/SeFootstep .bin, bgm/*.bnk
-- movie/, movie_ui/ (.usm — CRI Sofdec2/Mana), movie_native/*.mp4 (H.264 катсцены, Android-специфично)
-- shader.dat, shader2.dat, shadereff.dat; logo/{nvidia,transgaming}.wtb
-
 # Xbox 360 версия (mvl-mgrr.iso, XGD3)
 - Образ: XDVDFS со смещением 0x2080000 (XGD3). Экстрактор: scratchpad/xdvdfs.py. Распаковано в x360_extracted/ (default.xex, media/*; $SystemUpdate удалён)
 - default.xex: XEX2 retail, AES+LZX, TitleID 4B4E080A, база 0x82000000, entry 0x82302C28, образ 27 525 120 Б
 - Расшифрованный образ: x360_work/mgrr_image.bin (полный образ с базы 0x82000000)
 - Секции: .rdata 0x82000400, .pdata 0x821F3A00 (57 025 функций), .text 0x82270000 (0xF8D75C ≈16,3 МБ ≈ 4,08 млн инстр.), .data 0x83200000, .idata 0x839B0000
-- Middleware (те же сборки, что в PC): CRI Atom/ADX/ASR Sep 2012 (XBOX360), Wwise (AK::), Havok 3.1.0; 529 RTTI-типов
+- Middleware: CRI Atom/ADX/ASR Sep 2012 (XBOX360), Wwise (AK::), Havok 3.1.0; 529 RTTI-типов
 - XenonRecomp (hedge-dev, ddd128b) собран: scratchpad/XenonRecomp/build. XenonAnalyse находит 0 jump tables:
   в .text ~691 bctr с индексной загрузкой, паттерн: lis/addi/lwzx(lbzx) + lis/addi + add + mtctr + bctr (относительные таблицы),
   Sonic-паттерны не подходят -> нужно дописать детектор.
@@ -77,12 +54,11 @@
 - Ложный след: «PM4-константы» 0xC0xxxxxx в 0x8271xxxx — это отрицательные float; 0x826CC000 и 0x8271D000–0x8271E000 — CRT/хелперы, не D3D.
 
 ## Слой обёрток движка (0x8278E000–0x82796800) — разобран частично
-- Это тонкие функции: «сравнить с кэшем состояния → вызвать 1–2 функции D3D-ядра». У PC то же самое (обёртка → vtable IDirect3DDevice9), в PC-обёртках видны номера D3DRS_* — это готовый словарь семантики.
-- Файлы: x360_work/WRAPPERS.md (словарь PC + гипотезы по 360), pc_wrappers.json, x360_wrapper_profiles.json, func_pairs.json (2 182 пары функций по общим строкам), matched.json.
-- Инструменты: tools/pc_d3d_wrappers.py, pc_args.py, call_args.py, align_funcs.py, propagate.py, wrapper_match.py, sigmatch.py.
+- Это тонкие функции: «сравнить с кэшем состояния → вызвать 1–2 функции D3D-ядра».
+- Файлы: x360_work/WRAPPERS.md (гипотезы и профили обёрток 360). Инструмент: tools/call_args.py (гистограммы аргументов в местах вызова).
 - Подтверждено (high): SetPixelShaderConstantF = 0x82796620 (ядро 0x826AC190); SetVertexShaderConstantF = 0x827966A0 (ядро 0x826AC0B8).
 - Вероятно: Clear = 0x82791750; SetStencilWriteMask = 0x82790AA0; создание текстур/целей = 0x82792740, 0x82795548.
-- Не получилось: сопоставить булевы/enum-состояния (cull, z, blend…) по числу вызовов или аргументам — у 360 набор обёрток другой, совпадений по статистике недостаточно. Совпадение функций по строкам попало почти целиком в код ресурсов, не рендера (рендер-функции без строк).
+- Не получилось: опознать булевы/enum-состояния (cull, z, blend…) по числу вызовов и аргументам — статистики недостаточно.
 - Следующие способы: (а) декодировать семантику установщиков по функции отрисовки/flush (0x826BC928, 0x826BCD40) — какое слово теневого состояния в какой регистр Xenos уходит; (б) динамически: трассировка вызовов обёрток при работе игры под Xenia/в нашем рантайме и привязка к изменениям регистров GPU.
 
 ## Статическое чтение DrawVertices (0x826BC928) — установщики состояния расшифрованы
@@ -110,7 +86,7 @@
 
 ## Вершинные форматы — разобраны и проверены на реальных вершинах (x360_work/VERTEX_FORMATS.md)
 - Формат вершин задаётся деклараций D3D, а не буфером: CreateVertexDeclaration=0x826AC938 (элемент 12 байт: stream, offset, type u32, method, usage, index), SetVertexDeclaration=0x826AC830 ([dev+12240], бит 19 в dev+16).
-- 74 декларации в образе 360 (x360_vertex_decls.json) и 73 в PC (pc_vertex_decls.json, добыты из массивов D3DVERTEXELEMENT9 в PC-exe).
+- 74 декларации в образе 360 (x360_vertex_decls.json).
 - Слово типа Xbox: биты 0–5 формат Xenos, 6–7 endian, 8 signed, 9 integer. 10 типов: FLOAT1/2/3/4, FLOAT16_2/4, UBYTE4(N), D3DCOLOR и **10_11_11 (нормали, только Xbox)**.
 - Нормаль 10_11_11 расшифрована на em0200.wmb: из BE-dword поля 10/11/11 от старших бит, длина 0,999±0,000 на 2000 вершинах; тангент — ubyte4n [W,X,Y,Z]; индексы/веса костей — естественный порядок байт.
 - ИСПРАВЛЕНИЕ по текстурам: ранее учитывал только .wtb. Текстуры моделей лежат в .wta (заголовки, в .dat) + .wtp (данные, в .dtt). Итого 8 303 текстуры, 1,9 ГБ; набор форматов не изменился.
@@ -229,3 +205,29 @@ M0.1: git-репозиторий (whitelist .gitignore), LICENSE GPL-3, README, 
 - Проверка на реальном микрокоде (кэш шейдеров Xenia после запуска до стартового экрана, `--xsh`): PS **88 из 88** опознаны по микрокоду, VS только 11 из 71 (D3D их патчит, как у NFS). 5 микрокодов встречаются в нескольких контейнерах с разным SPIR-V (частицы и эффекты shadereff) — разобрать, когда дойдёт до них.
 - VS опознаются через хук `CreateXShader` (`game/src/mgrr_shader_hooks.cpp`, `0x826ACC10`/`0x826ACDF8`; `r3` = контейнер). Запуск на PC до стартового экрана: игра при загрузке создаёт около 1000 шейдеров, в библиотеке найдены все, кроме тех самых непереведённых (совпадают размеры: 1696 `modelshadernewshadowreceiverspot`, 824, 600, 632, 856, 692, 844 — шейдеры shadereff). Оба хука принимают оба типа; тип определяется по сигнатуре.
 - Этот же запуск — первый с `skip_msr` на PC: 75 с без ошибок в логе, стартовый экран 30 к/с (лимит игры), демо-геймплей 60 к/с при 360–400 draw.
+
+## M2 — декодер кольца (первая версия, на консоли ещё не проверена)
+- `game/src/mgrr_gpu.cpp`: `DRAW_INDX`/`DRAW_INDX_2` пишут инициатор и `VGT_DMA_BASE/SIZE` в зеркало регистров (раньше не писали; у `DRAW_INDX` первое слово — запрос видимости). Copy-mode → `Copiar`, остальное → `RenderDk::Dibujar` с `PeticionDibujo`. Поколения констант VS/PS, fetch и viewport растут только при реальном изменении значения, как у NFS. `WAIT_REG_MEM` увеличивает `g_sincronizaciones_anillo`. Swap передаёт `LeerTexturaSwap` (fetch-константу 0) и размер из пакета — раньше была пустая.
+- `IM_LOAD` / `IM_LOAD_IMMEDIATE`: PS опознаётся по микрокоду; VS — по адресу копии микрокода. Её записывает хук `CreateXShader` (`obj+24` после возврата, физический адрес; `mgrr_shader_hooks.h` `ShaderAtAddress`), запасной путь — по микрокоду. Пропатченный микрокод VS уходит в `vs_microcodigo`.
+- Отчёт `[gpu]` раз в 10 с: как найдены шейдеры (VS по адресу, по микрокоду, не найдены; PS не найдены), сколько draw отправлено, а также `[gpu] renderer:` — нарисовано, отклонено с причинами (`EstadisticasDibujos::causas`), pipelines, текстуры.
+- Ожидаемые ограничения рендерера SDK: цели цвета только 8_8_8_8 (причины 200+формат), без немедленных индексов (2) и без части примитивов (100+тип). У MGR будет видно по причинам отказов.
+- Экранный оверлей (`game/src/mgrr_overlay.*`, `mgrr_stats.h`): справа вверху FPS, время кадра (среднее и максимум за секунду), draw и resolve за кадр (из хуков D3D, на обеих платформах). На Switch добавлены строки декодера: нарисовано, отклонено и без шейдера за секунду, главные причины отказов, как найдены VS и PS. `--mgrr_overlay` по умолчанию включён на Switch и выключен на PC; оверлей SDK остаётся на L+R+вверх. Проверено на PC: стартовый экран — 30,0 FPS, 33,3 мс, около 423 draw. Счётчики хуков draw теперь работают всегда; `--mgrr_draw_stats` включает только строку `[draws]` в логе.
+
+## nxlink (2026-10-21)
+
+`tools/nxlink.sh [IP] [-- аргументы]`: отправляет `out/sd/switch/mgrr/mgrr_clang.nro` в `sdmc:/switch/mgrr/` через netloader hbmenu (Y) и запускает его; `nxlink -s` принимает stdout, лог пишется и в `build/nxlink_logs/`. `nxlink` берётся из образа devkitpro/devkita64 (`build/tools/nxlink`). Игра (`game/src/mgrr_nxlink.cpp`, `OnPostInitLogging`) открывает сокеты только при запуске через nxlink (`__nxlink_host`) и подменяет консольный sink логов на stdout. На этом ПК ufw включён: для лога нужен входящий TCP 28771 из LAN; UDP-поиск консоли может не пройти (ufw, tun0), тогда указывать IP.
+
+Снимки экрана (тот же день): при запуске через nxlink поток игры раз в `--mgrr_nxlink_shot_s` секунд (30 по умолчанию, 0 — выкл.) и по L+R+Minus снимает экран через caps:sc (`capsscCaptureJpegScreenShot`, весь экран с оверлеями) и пишет его в тот же stdout строками по 2 КБ base64: `@@MGRR_SHOT <имя> <часть> <частей> <crc32> <данные>` (первый вариант одной строкой на ~470 КБ на консоли дважды из десяти разорвался). `tools/nxlink_recv.py` раскладывает поток в `build/nxlink_logs/<время>/`: `log.txt` и `shot_NNN_{auto,button}.jpg`. Отдельный порт не нужен. Ctrl+C останавливает nxlink, приёмник дочитывает до конца.
+
+## Логи SDK на английском (2026-10-21)
+
+Сообщения рендерера deko3d, ввода-вывода, аудио и сохранений в rexglue-sdk-nx написаны по-испански. `tools/sdk_patches/0002-english-log-messages.patch` переводит 297 строк в 22 файлах: только строковые литералы в вызовах логов (REXLOG_*, REXKRNL_*, Registro, Rechazar, X360_INFORME...) и значения, которые туда подставляются. Проверено скриптом: код вне литералов байт в байт тот же, плейсхолдеры `{}`/`%` совпадают по числу и порядку. Не переведено (в логах MGR не встречалось): switch_perf (rex_perfil.log), apm, saltynx, sysclk, ошибки glsl/cache_dksh.
+
+## T1 — запись кадров GPU на PC (2026-10-22)
+
+Зачем: игра целиком в Ryujinx не идёт (SDK держит гостевую память на ловле ошибок доступа, а Ryujinx их программе не передаёт: в нём нет `svcReturnFromException`). Рендер отлаживаем повтором записанных кадров (PLAN.md, T1–T4).
+- SDK `gpu_trace` (`sdk/include/rex/graphics/gpu_trace.h`, патч `tools/sdk_patches/0006-…`): `--gpu_trace_path=F --gpu_trace_start=N --gpu_trace_frames=K` пишет K кадров после swap N: регистры на начало, каждый пакет основного кольца, перед ним — прочитанная GPU память (`SharedMemory::RequestRanges`, `INDIRECT_BUFFER`, `IM_LOAD`), блоки с дедупликацией по XXH3.
+- Игра пишет `F.shaders` (таблица копий микрокода: физ. адрес, размер, хеш контейнера, имя) через ~60 кадров после конца записи.
+- Стартовый экран, swap 2400, 3 кадра: 48 пакетов кольца, 84 косвенных буфера, 1682 draw, 464 IM_LOAD, 1780 чтений; 69 МБ (почти всё — первый кадр: текстуры). Таблица шейдеров — 1241 копия. Разбор: `python3 -I tools/gputrace.py F`.
+- Для Ryujinx в SDK ещё два патча, на консоли ничего не меняют: `0004` (нет argv — путь NRO по умолчанию от игры) и `0005` (нет хэндла процесса от загрузчика — получаем свой через IPC, как hbloader; до блокировки памяти, иначе дедлок в `threadCreate`).
+

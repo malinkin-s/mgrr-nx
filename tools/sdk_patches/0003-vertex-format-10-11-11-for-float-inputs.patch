@@ -1,0 +1,16 @@
+diff --git a/src/x360/deko/dibujos.cpp b/src/x360/deko/dibujos.cpp
+index 88c3535..221adc0 100644
+--- a/src/x360/deko/dibujos.cpp
++++ b/src/x360/deko/dibujos.cpp
+@@ -306,9 +306,8 @@ bool AtributoDe(uint32_t formato, bool entrada_entera, bool con_signo, bool ente
+       tipo = normal;
+       return true;
+     case 16:  // k_10_11_11: a packed normal the shader decodes itself
+-      if (!entrada_entera) {
+-        return false;
+-      }
++      // The raw 32 bits, for a uint4 input or a float4 one (mgr-nx: MGR's normals and tangents; its library decodes
++      // them with tfetchR11G11B10(asuint(...)) when SPEC_CONSTANT_R11G11B10_NORMAL is set).
+       r11g11b10 = true;
+       tamano = DkVtxAttribSize_1x32;
+       tipo = DkVtxAttribType_Uint;

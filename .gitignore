@@ -1,5 +1,5 @@
 # Whitelist. Only this project's own sources, configs and docs are tracked.
-# NEVER commit game data: extracted ISO/OBB/APK, decrypted images, recompiled C++ (ppc*/),
+# NEVER commit game data: extracted ISO, decrypted images, recompiled C++ (ppc*/),
 # extracted or translated shaders, textures, models, renders of game assets, build outputs.
 /*
 !/.gitignore
@@ -56,9 +56,12 @@ __pycache__/
 *.mgsl
 *.xsh
 *.ppm
-# console keys and saves
+# console keys and saves (keys/ is outside the whitelist anyway)
 *.keys
 *.bin
+# the Switch emulator (Ryujinx, its data, keys and SD card) lives in build/emu/, outside the whitelist; never under tools/
+emu/
+ryujinx*/
 # editors and OS
 .vscode/
 .idea/

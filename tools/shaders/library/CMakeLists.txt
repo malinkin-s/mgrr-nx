@@ -13,7 +13,7 @@ set(SDK "${REPO}/sdk")
 add_executable(mgrr_hlsl "${REPO}/tools/shaders/mgrr_hlsl.cpp" "${REPO}/tools/shaders/xenosrecomp/shader_recompiler.cpp")
 target_include_directories(mgrr_hlsl PRIVATE "${REPO}/tools/shaders/xenosrecomp" "${SDK}/thirdparty/fmt/include"
                                               "${SDK}/thirdparty/xxHash")
-target_compile_definitions(mgrr_hlsl PRIVATE FMT_HEADER_ONLY XXH_INLINE_ALL NFSMW_RECOMP)
+target_compile_definitions(mgrr_hlsl PRIVATE FMT_HEADER_ONLY XXH_INLINE_ALL NFSMW_RECOMP MGRR_PACKED_NORMALS)
 target_compile_options(mgrr_hlsl PRIVATE -include "${REPO}/tools/shaders/xenosrecomp/pch_min.h" -w)
 set_target_properties(mgrr_hlsl PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 
