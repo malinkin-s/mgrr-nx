@@ -5,8 +5,8 @@
 * At draw time D3D (0x826CB580) combines declaration + vertex shader and patches the shader's `vfetch` instructions (format/stride) — a renderer that translates shaders to SPIR-V must instead build the Vulkan vertex input from the declaration and the stream strides (SetStreamSource, stride byte at dev+12904+stream).
 * XenosRecomp maps each `vfetch` to a (usage, index) taken from the shader container, so the join is **shader input semantic ↔ declaration element (usage, index)**.
 
-## Element type words (all that occur in the 74 declarations; PC names obtained by aligning the 360 and PC tables element by element)
-| type word | PC D3DDECLTYPE | decoded | Vulkan |
+## Element type words (all that occur in the 74 declarations)
+| type word | D3DDECLTYPE equivalent | decoded | Vulkan |
 |---|---|---|---|
 | 0x2C83A4 | FLOAT1 | {'format': '32_FLOAT', 'endian': 2, 'signed': 1, 'integer': 1, 'color_swizzle': 0, 'raw': '0x2c83a4'} | R32_SFLOAT (1 uses) |
 | 0x2C23A5 | FLOAT2 | {'format': '32_32_FLOAT', 'endian': 2, 'signed': 1, 'integer': 1, 'color_swizzle': 0, 'raw': '0x2c23a5'} | R32G32_SFLOAT (11 uses) |
@@ -40,5 +40,4 @@ Layout `POSITION float3 @0, TEXCOORD0 float16_2 @12, NORMAL 10_11_11 @16, TANGEN
 * Bone indices/weights are in natural byte order: `11 00 00 00` / `FF 00 00 00` = bone 0x11, weight 1.0.
 
 ## Declaration catalog
-74 declarations / 296-ish elements in `x360_work/x360_vertex_decls.json` (address, elements with stream/offset/type/usage/index) and the PC originals in `pc_vertex_decls.json` (73).
-The 360 and PC tables share 29 identical layouts; the other layouts differ because the Xbox build packs normals/tangents as 4-byte elements instead of FLOAT16_4.
+74 declarations / 296-ish elements in `x360_work/x360_vertex_decls.json` (address, elements with stream/offset/type/usage/index).

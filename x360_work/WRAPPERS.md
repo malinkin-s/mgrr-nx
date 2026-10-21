@@ -1,41 +1,10 @@
 # 360 engine wrapper layer (0x8278E000–0x82796800) — what is known
 
 Every function below is a thin engine-side wrapper: it (optionally) compares the new value with a cached copy in a global
-state-cache struct and calls one or two functions of the D3D core. PC has the same pattern (wrapper → `IDirect3DDevice9` vtable).
+state-cache struct and calls one or two functions of the D3D core.
 
-Confidence: **high** = argument profile and role match a PC wrapper with a known D3D method; **medium** = role inferred from
-one independent signal; **low** = hint only.
-
-## PC wrapper dictionary (certain: constants pushed to SetRenderState / vtable offset)
-
-| PC wrapper | callers | what |
-|---|---|---|
-| 0x13187f0 | 42 | SetRenderState(CULLMODE=22) |
-| 0x1318830 | 12 | SetRenderState(SRGBWRITEENABLE=194) |
-| 0x1318870 | 52 | SetRenderState(ZENABLE=7) |
-| 0x13188c0 | 43 | SetRenderState(ZWRITEENABLE=14) |
-| 0x1318910 | 1 | SetRenderState(ZFUNC=23) |
-| 0x1318950 | 37 | SetRenderState(ALPHATESTENABLE=15) |
-| 0x13189a0 | 6 | SetRenderState(ALPHAREF=24 / ALPHAFUNC=25) |
-| 0x1318a10 | 81 | SetRenderState(ALPHABLENDENABLE=27) |
-| 0x1318a50 | 4 | SetRenderState(206 SEPARATEALPHABLENDENABLE) |
-| 0x1318af0 | 75 | SetBlendFunc(src, dst, op) → SRCBLEND/DESTBLEND/BLENDOP |
-| 0x1318b40 | 24 | SetBlendFuncSeparateAlpha(…) → 207/208/209 |
-| 0x1318bf0 | 9 | SetRenderState(COLORWRITEENABLE=168) |
-| 0x1318c30 | 23 | SetRenderState(COLORWRITEENABLE=168) |
-| 0x1318ce0 | 51 | SetRenderState(COLORWRITEENABLE=168) |
-| 0x1318f00 | 24 | SetRenderState(STENCILENABLE=52 / TWOSIDEDSTENCIL=185) |
-| 0x1318f80 | 11 | SetRenderState(STENCILFAIL/ZFAIL/PASS 53–55) |
-| 0x1319010 | 13 | SetRenderState(STENCILFUNC/REF/MASK 56–58) |
-| 0x13190a0 | 11 | SetRenderState(STENCILWRITEMASK=59) |
-| 0x1317dd0 | 3 | SetRenderState(SCISSORTESTENABLE=174) |
-| 0x1318eb0 | 3 | SetRenderState(MULTISAMPLEANTIALIAS=161) |
-| 0x1317d20 | 24 | IDirect3DDevice9::Clear (vt 0xAC) |
-| 0x131cad0 | 68 | SetVertexShaderConstantF (vt 0x178) |
-| 0x131cb10 | 110 | SetPixelShaderConstantF (vt 0x1B4) |
-| 0x1317f70 | 12 | SetIndices (vt 0x1A0) |
-| 0x1318000 | 27 | SetVertexDeclaration+SetVertexShader (vt 0x15C,0x170) |
-| 0x1318460 | 7 | SetVertexDeclaration+SetVertexShader+SetPixelShader |
+Confidence: **high** = confirmed by the D3D core function it calls; **medium** = role inferred from one independent signal;
+**low** = hint only. (An earlier identification pass compared against another build of the game; that material is gone.)
 
 ## 360 wrappers with a tentative identity
 
