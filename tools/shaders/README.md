@@ -1,10 +1,21 @@
-# Шейдеры MGR:R (Xbox 360) -> HLSL -> SPIR-V
+# Шейдеры MGR:R (Xbox 360) → библиотека для рендерера deko3d
 
-1. Достать DAT из CPK и распаковать (CRILAYLA с затёртой сигнатурой, см. tools/cpk.py):
-   `python3 tools/cpk.py x x360_extracted/media/data000.cpk x360_work/shaders '(^|/)(shader.*|ShaderSign)\.(dat|bxm)$'`
-2. Распаковать DAT (tools/pgdat.py): shader.dat (1029), shader2.dat (83), shadereff.dat (428):
-   `python3 tools/pgdat.py x shader.dat OUT`
-3. XenosRecomp (hedge-dev/XenosRecomp@990d03b, собран clang+cmake): `XenosRecomp in.vso out.hlsl shader_common.h`
-4. DXC (thirdparty/dxc-bin, LD_LIBRARY_PATH=.../lib/x64): `dxc-linux -spirv -T vs_6_0|ps_6_0 -E main -fspv-target-env=vulkan1.2 -HV 2021` (tools/shaders/dxc_one.sh)
+Одна команда из извлечённого диска (`x360_extracted/`):
 
-Режим каталога XenosRecomp (`XenosRecomp DIR out.cpp shader_common.h`) падает с segfault из-за 4 шейдеров частиц — используйте пофайловый режим.
+```
+DXC=/путь/к/dxc tools/shaders/build_library.sh [JOBS]
+```
+
+Результат — `build/shaders/mgrr_shaders.mgsl`. Это данные из игры, поэтому в git они не попадают. Файл кладётся рядом с исполняемым файлом: на Switch в `sdmc:/switch/mgrr/`, путь можно сменить опцией `--mgrr_shader_library`.
+
+| Шаг | Чем |
+|---|---|
+| `data000.cpk` → `shader.dat`, `shader2.dat`, `shadereff.dat` → 1492 контейнера | `tools/cpk.py`, `tools/pgdat.py` |
+| контейнер → HLSL | `mgrr_hlsl.cpp` + `xenosrecomp/` (XenosRecomp с правками xbox360-nx, режим deko3d) |
+| HLSL → SPIR-V | DXC: `-T vs/ps_6_6 -HV 2021 -fspv-target-env=vulkan1.2 -fvk-use-dx-layout -Werror=parameter-usage -DNFSMW_DEKO3D` |
+| упаковка и проверка тем же кодом, что в игре | `library/mgrr_pack_shaders.cpp` + `game/src/mgrr_shader_library.cpp`, `game/src/mgrr_shaders.cpp` |
+| SPIR-V → GLSL → DKSH, путь компиляции консоли | `dksh_probe/` (SDK `SpirvAGlsl` + uam) |
+
+С флагом `--xsh` упаковщик ищет в библиотеке микрокод, который игра реально загружала при запуске на PC (кэш шейдеров Xenia, `~/.local/share/mgrr/cache/shaders/shareable/4B4E080A.xsh`). Скрипт передаёт этот флаг сам, если файл есть.
+
+Старые файлы `shaderlib.py` и `dxc_one.sh` — для офлайн-просмотрщика моделей (`tools/vkview`, `x360_work/REAL_SHADERS.md`). Они работают через upstream XenosRecomp и Vulkan, а не через deko3d.

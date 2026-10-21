@@ -19,6 +19,9 @@ set_property(SOURCE generated/default/mgrr_register.cpp PROPERTY SKIP_PRECOMPILE
 set(MGRR_SOURCES
     src/main.cpp
     src/mgrr_draw_stats.cpp
+    src/mgrr_shader_hooks.cpp
+    src/mgrr_shader_library.cpp
+    src/mgrr_shaders.cpp
 )
 
 add_executable(mgrr ${MGRR_SOURCES})
