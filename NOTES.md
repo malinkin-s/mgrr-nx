@@ -171,3 +171,10 @@ M0.1: git-репозиторий (whitelist .gitignore), LICENSE GPL-3, README, 
 - Сборка clang 22, Release, `-j5` (15 ГБ RAM): SDK + 267 файлов кода игры за 12 мин, 0 ошибок; `build/linux/mgrr` 168 МБ. Скрипты: `tools/build_from_iso.sh` (распаковка `tools/xdvdfs.py` — побайтно совпадает с x360_extracted, проверка sha256 default.xex, кодоген, сборка), `tools/run_linux.sh` (запуск с `--gpu_plugin=xenos --mnk_mode=true` — клавиатура как геймпад, по умолчанию в SDK выключена; без LD_LIBRARY_PATH не находится librexruntime.so).
 - Без GPU-плагина игра доходит до `VdInitializeRingBuffer` и ждёт. С `--gpu_plugin=xenos` (Xenia, Vulkan, RTX 3050) за 60 с: без падений и «unregistered function», ~90 МБ прочитано из cpk, звук идёт (XMA), создаётся ~40 пайплайнов, swapchain 1920×1080; единственное массовое предупреждение — ~1800 «Texture fetch constant has invalid type» (нулевые fetch-константы). Что на экране — проверить глазами.
 - Проверено глазами: стартовый экран «Press Start», без артефактов, звук нормальный.
+
+## M0.4 — сборка под Switch
+- `python3 sdk/tools/switch_setup.py` (подмодули для Switch, SPIRV-Cross и uam на фиксированных коммитах, конфиг FFmpeg поверх подмодуля).
+- Тулчейн `tools/switch_build/switch-devkitA64.cmake` — из xbox360-nx без изменений (`-D_GNU_SOURCE`, Tracy выкл., TLS local-exec, `--no-relax`). Со стандартным `Switch.cmake` devkitPro SDK не собирается (newlib прячет strdup/fileno/posix_memalign, Tracy не знает Horizon).
+- Конфигурация в контейнере devkitpro/devkita64: `cmake -S game -B build/switch -G Ninja -DCMAKE_TOOLCHAIN_FILE=tools/switch_build/switch-devkitA64.cmake -DCMAKE_BUILD_TYPE=Release -DREXSDK_DIR=sdk -DREXGLUE_SWITCH_DEKO3D=ON`. GCC 15.2 -O3 на всём (clang для кода игры — следующим шагом).
+- `mgrr_register.cpp` (одна функция, ~86 тыс. вызовов SetFunction) GCC -O3 не собрал за 30+ мин → для него `-O1` (game/CMakeLists.txt); пересборка 55 с.
+- Итог: 0 ошибок, `build/switch/mgrr.nro` 78 МБ. Без `--game_data_root` данные ищутся в `game/` рядом с NRO (`sdmc:/switch/mgrr/game/`). GPU-плагина на Switch нет — ожидаем остановку на `VdInitializeRingBuffer`, как на PC без плагина.
