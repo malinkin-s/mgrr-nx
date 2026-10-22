@@ -1608,17 +1608,27 @@ void ShaderRecompiler::recompile(const uint8_t* shaderData, const std::string_vi
             uint32_t value;
         };
     
+        // mgr-nx: the Xenos links the shaders by interpolator slot, not by semantic: pixel shader interpolator i
+        // reads what the vertex shader exports to slot i, and Direct3D leaves those exports as they are (checked on
+        // MGR's title screen, rex/graphics/gpu_trace.h). The semantics can disagree: shadereff.espshaderbase writes
+        // its color to slot 1 as TEXCOORD1 and espshaderfalsevolumeparticle reads slot 1 as TEXCOORD7, so linked by
+        // name the red glow and lens streak read nothing. Texture coordinates and colors are named by slot instead.
+        const auto name = [i](const char* prefix, DeclUsage usage, uint32_t usageIndex) {
+            if ((usage == DeclUsage::TexCoord || usage == DeclUsage::Color) && i < 16)
+                return fmt::format("{}TexCoord{}", prefix, i);
+            return fmt::format("{}{}{}", prefix, USAGE_VARIABLES[uint32_t(usage)], usageIndex);
+        };
         if (isPixelShader)
         {
             value = reinterpret_cast<const PixelShader*>(shader)->interpolators[i];
-            println("\tfloat4 r{} = i{}{};", uint32_t(interpolator.reg), USAGE_VARIABLES[uint32_t(interpolator.usage)], uint32_t(interpolator.usageIndex));
+            println("\tfloat4 r{} = {};", uint32_t(interpolator.reg), name("i", interpolator.usage, uint32_t(interpolator.usageIndex)));
             printedRegisters[interpolator.reg] = true;
         }
         else
         {
             auto vertexShader = reinterpret_cast<const VertexShader*>(shader);
             value = vertexShader->vertexElementsAndInterpolators[vertexShader->field18 + vertexShader->vertexElementCount + i];
-            interpolators.emplace(i, fmt::format("o{}{}", USAGE_VARIABLES[uint32_t(interpolator.usage)], uint32_t(interpolator.usageIndex)));
+            interpolators.emplace(i, name("o", interpolator.usage, uint32_t(interpolator.usageIndex)));
         }
     }
 

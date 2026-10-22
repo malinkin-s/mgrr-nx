@@ -109,20 +109,13 @@ void AddCopy(uint32_t physical_address, uint32_t bytes, const rex::x360::Entrada
   g_copies[physical_address] = {bytes, entry};
 }
 
-void OnFrameForTrace(uint64_t frame) {
-  // gpu_trace.h counts the GPU's swaps, this the game's; the game is ahead by the frames in flight, so a second
-  // of margin. The table only grows, so later is never wrong.
-  static bool written = false;
-  if (written) return;
-  const std::string path = rex::cvar::GetFlagByName("gpu_trace_path");
-  if (path.empty()) {
-    written = true;
-    return;
-  }
-  const uint64_t end = uint64_t(std::max(0, rex::cvar::Query<int32_t>("gpu_trace_start"))) +
-                       uint64_t(std::max(0, rex::cvar::Query<int32_t>("gpu_trace_frames"))) + 60;
-  if (frame < end) return;
-  written = true;
+void OnFrameForTrace(uint64_t) {
+  // gpu_trace_last names each recording as it ends (sdk gpu_trace.h; at gpu_trace_start or on F9). The table only
+  // grows, and the shaders a recording uses were created before it, so it is written then.
+  static std::string written;
+  const std::string path = rex::cvar::GetFlagByName("gpu_trace_last");
+  if (path.empty() || path == written) return;
+  written = path;
   const std::string table = path + ".shaders";
   if (WriteCopies(table.c_str())) {
     REXLOG_INFO("[shaders] recorded shader copies written to {}", table);

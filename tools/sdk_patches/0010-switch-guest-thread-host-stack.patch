@@ -1,0 +1,105 @@
+Host stack of guest threads: --guest_thread_host_stack_kb, 4 MB on Switch instead of 16 MB. Horizon commits a
+thread's stack whole, so MGR's mission loading ran out of memory creating threads (black screen). A failed
+creation now logs process memory, the thread limit and the heap.
+
+--- a/src/system/xthread.cpp
++++ b/src/system/xthread.cpp
+@@ -12,6 +12,7 @@
+ #include <algorithm>
+ #include <atomic>
+ #include <cstring>
++#include <string>
+ 
+ #include <fmt/format.h>
+ 
+@@ -38,11 +39,25 @@
+ #include <rex/vec128.h>
+ 
+ #if REX_PLATFORM_SWITCH
++#include <malloc.h>
+ #include <string_view>
+ 
++#include <switch.h>
++
+ #include "../core/threading_switch.h"
+ #endif
+ 
++// mgr-nx: the host stack of each guest thread. Horizon commits a thread's stack whole when it is created (no lazy
++// pages), so 16 MB per thread ran the heap out when MGR's mission loading created more: CreateThread failed and the
++// game stopped on a black screen. The guest's own stack is in guest memory; the host one only holds the recompiled
++// functions' frames.
++#if REX_PLATFORM_SWITCH
++REXCVAR_DEFINE_INT32(guest_thread_host_stack_kb, 4096, "Kernel",
++                     "Host stack of each guest thread, in KB (Switch: committed whole when the thread is created)");
++#else
++REXCVAR_DEFINE_INT32(guest_thread_host_stack_kb, 16384, "Kernel", "Host stack of each guest thread, in KB");
++#endif
++
+ REXCVAR_DEFINE_BOOL(ignore_thread_priorities, true, "Kernel",
+                     "Ignores game-specified thread priorities");
+ 
+@@ -57,6 +72,37 @@
+ 
+ using namespace rex::literals;
+ 
++namespace {
++
++size_t HostStackSize() {
++  return size_t(std::clamp(REXCVAR_GET(guest_thread_host_stack_kb), 256, 65536)) * 1024;
++}
++
++// Why a host thread could not be created: on Horizon, the process's memory and its thread limit.
++std::string HostResourceReport() {
++#if REX_PLATFORM_SWITCH
++  u64 used = 0, total = 0;
++  svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
++  svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
++  std::string threads = "unknown";
++  u64 limit_handle = 0;
++  if (R_SUCCEEDED(svcGetInfo(&limit_handle, InfoType_ResourceLimit, INVALID_HANDLE, 0)) && limit_handle) {
++    s64 current = -1, limit = -1;
++    svcGetResourceLimitCurrentValue(&current, Handle(limit_handle), LimitableResource_Threads);
++    svcGetResourceLimitLimitValue(&limit, Handle(limit_handle), LimitableResource_Threads);
++    svcCloseHandle(Handle(limit_handle));
++    threads = fmt::format("{} of {}", current, limit);
++  }
++  const struct mallinfo heap = mallinfo();
++  return fmt::format("; process memory {} of {} MB, threads {}, heap {} MB in use / {} MB free", used >> 20,
++                     total >> 20, threads, size_t(heap.uordblks) >> 20, size_t(heap.fordblks) >> 20);
++#else
++  return {};
++#endif
++}
++
++}  // namespace
++
+ uint32_t next_xthread_id_ = 0;
+ 
+ XThread::XThread(KernelState* kernel_state)
+@@ -464,7 +510,7 @@
+   RetainHandle();
+ 
+   rex::thread::Thread::CreationParameters params;
+-  params.stack_size = 16_MiB;  // Allocate a big host stack.
++  params.stack_size = HostStackSize();
+   params.create_suspended = true;
+   thread_ = rex::thread::Thread::Create(params, [this]() {
+     rex::initialize_seh_thread();
+@@ -498,7 +544,7 @@
+ 
+   if (!thread_) {
+     // TODO(benvanik): translate error?
+-    REXSYS_ERROR("CreateThread failed");
++    REXSYS_ERROR("CreateThread failed (host stack {} KB){}", params.stack_size >> 10, HostResourceReport());
+     return X_STATUS_NO_MEMORY;
+   }
+ 
+@@ -1438,7 +1484,7 @@
+ 
+     rex::thread::Thread::CreationParameters params;
+     params.create_suspended = true;  // Not done restoring yet.
+-    params.stack_size = 16_MiB;
++    params.stack_size = HostStackSize();
+     thread->thread_ = rex::thread::Thread::Create(params, [thread, state]() {
+       // Set thread ID override. This is used by logging.
+       rex::thread::set_current_thread_id(thread->handle());

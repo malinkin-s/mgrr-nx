@@ -1,0 +1,15 @@
+diff --git a/src/x360/deko/dibujos.cpp b/src/x360/deko/dibujos.cpp
+index 221adc0..de1b05a 100644
+--- a/src/x360/deko/dibujos.cpp
++++ b/src/x360/deko/dibujos.cpp
+@@ -153,7 +153,9 @@ uint32_t EmpujarDiferencias(DkCmdBuf cmd, DkGpuAddr bloque, uint32_t tam_bloque,
+       continue;
+     }
+     uint32_t f = r + 1;
+-    while (f < fin && !iguales(f)) {
++    // At most 2 KB per push: the console takes more, but Ryujinx's constant buffer updater holds 512 words and
++    // throws on a longer one (the graphics test bench replays there).
++    while (f < fin && f - r < 128 && !iguales(f)) {
+       ++f;
+     }
+     const uint32_t bytes = (f - r) * 16;

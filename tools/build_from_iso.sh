@@ -27,9 +27,13 @@ fi
 sdk=$repo/sdk
 # Our fixes to the SDK (rexglue-sdk-nx), kept as patches until they are upstream.
 for p in "$repo"/tools/sdk_patches/*.patch; do
-  if git -C "$sdk" apply --reverse --check "$p" 2>/dev/null; then continue; fi  # already applied
-  echo "== patching sdk: $(basename "$p")"
-  git -C "$sdk" apply "$p"
+  if git -C "$sdk" apply --check "$p" 2>/dev/null; then
+    echo "== patching sdk: $(basename "$p")"
+    git -C "$sdk" apply "$p"
+  elif ! git -C "$sdk" apply --reverse --check "$p" 2>/dev/null; then
+    # Neither way: applied, then partly changed by a later patch (0009 rewrites lines 0002 translated).
+    echo "== sdk: $(basename "$p") taken as applied (a later patch changed some of its lines)"
+  fi
 done
 rexglue=$sdk/out/linux-amd64/Release/rexglue
 if [ ! -x "$rexglue" ]; then

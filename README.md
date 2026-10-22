@@ -8,7 +8,7 @@ An unofficial native Nintendo Switch port of **Metal Gear Rising: Revengeance** 
 made by static recompilation: no emulator.
 
 [![Switch](https://img.shields.io/badge/Nintendo_Switch-Homebrew-E60012?style=for-the-badge&logo=nintendoswitch&logoColor=white)](#)
-[![Status](https://img.shields.io/badge/Status-Early_development_(M2)-orange?style=for-the-badge)](#status)
+[![Status](https://img.shields.io/badge/Status-Renders_in--game_(M2)-orange?style=for-the-badge)](#status)
 [![Architecture](https://img.shields.io/badge/Architecture-PowerPC_→_AArch64-0091BD?style=for-the-badge&logo=arm&logoColor=white)](#)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 
@@ -35,9 +35,18 @@ The recompiled C++, the translated shaders and every game file stay local and ar
 
 ## Status
 
-**The game is not playable yet.** On a Switch it boots, plays sound, answers the controller and runs its logic,
-including gameplay. The native renderer already draws the 2D interface (menus, text, HUD); 3D scenes are not
-drawn yet.
+**Not ready to play yet, but it renders.** On a Switch the game boots, plays sound, answers the controller, and the
+native deko3d renderer draws it in full: the title screen with its 3D scene and effects, the menus, the VR training
+and the first mission R-00 with enemies, combat, particles and the HUD. Known issues: black flicker on Raiden's face,
+stutters, and the frame rate in missions (about 38–45 FPS with overclocking, see below).
+
+| Title screen | VR training |
+| :---: | :---: |
+| ![Title screen](docs/screenshots/title.jpg) | ![VR training](docs/screenshots/training.jpg) |
+| **R-00** | **Combat** |
+| ![Mission R-00](docs/screenshots/mission.jpg) | ![Combat](docs/screenshots/combat.jpg) |
+
+<sub>Captured on a Switch (Erista) with the port's debug overlay in the corner, October 2026.</sub>
 
 | Milestone | Goal | State |
 | :--- | :--- | :--- |
@@ -50,17 +59,15 @@ drawn yet.
 The first target is a vertical slice, the prologue **R-00**, at **60 FPS on any Switch with overclocking**. When the
 frame budget is tight, the load is reduced (resolution, shadows, particles, draw distance), never the frame rate.
 
-### Measured so far (Switch, Erista, stock 1020 MHz CPU, no rendering yet)
+### Measured so far (Switch, Erista, with rendering)
 
-| Scene | FPS | Draws per frame | CPU |
+| Scene | FPS | Draws per frame | GPU per frame |
 | :--- | :--- | :--- | :--- |
-| Logos | 60 | 6 | 113 % of 300 % |
-| Title screen (capped at 30 by the game) | 22 | 390–560 | 245 % |
-| Gameplay | 37–48 | 280–385 | 200 % |
+| Title screen and menus (capped at 30 by the game) | 30 | ~490 | 18 ms |
+| VR training | ~60 | 360–400 | — |
+| Mission R-00 (CPU 1785 MHz, GPU 921 MHz) | 38–45 | 800–1400 | 12–15 ms |
 
-Stack samples showed the threads were mostly waiting on one global lock that the recompiler put around the Xbox
-360's atomic operations; it is now removed (`skip_msr`) and waiting for the next console measurement. Details and
-every measurement: [NOTES.md](NOTES.md).
+The GPU fits in a 60 FPS frame; the CPU side is next. Details and every measurement: [NOTES.md](NOTES.md).
 
 ### Done in M2 so far
 
@@ -68,13 +75,17 @@ every measurement: [NOTES.md](NOTES.md).
   shader binary); 1482 make it, including every shader the title screen uses.
 - Shader identification: pixel shaders by their microcode (88 of 88 on the title screen), vertex shaders through
   a hook on the game's shader creation (every shader the game creates is found, except the 10 untranslated ones).
-- GPU ring decoder: each of the game's draws becomes a request to the deko3d renderer. The 2D interface is drawn
-  on the console, complete and without artifacts.
+- GPU ring decoder: each of the game's draws becomes a request to the deko3d renderer, including the clears Direct3D
+  does by drawing with its own shaders, and the multisampled surfaces it aliases.
+- Shaders linked by interpolator slot, as the Xenos does (not by semantic): this brought back the red glow of the
+  title screen and other effects.
+- Renderer fixes merged from [ds2-nx](https://github.com/VasilkovND/ds2-nx) (more render target and resolve formats,
+  signed textures, partial resolves, the frame dump).
+- Graphics test bench: frames recorded on PC are replayed through the Switch renderer (in Ryujinx and on the console)
+  and compared with Xenia's image, frame by frame and resolve by resolve. The title screen is within 1.4 % of the
+  reference (pixels off by more than 32 of 255). The console stays the target; the emulator only filters out errors.
 - Vertex formats: packed 10:11:11 normals are decoded in the shaders.
-- Graphics test bench (in progress): frames recorded on PC are replayed on the Switch renderer, on the console and
-  in an emulator, and compared with the reference image. The console stays the target; the emulator only filters
-  out errors before a console run.
-- Next: 3D scenes of the main menu and of R-00.
+- Next: the flicker on Raiden's face, then frame rate.
 
 ---
 
@@ -139,7 +150,13 @@ Logs go to `sdmc:/switch/mgrr/logs/`.
 - `tools/nxlink.sh [SWITCH_IP]` sends the build over the network (hbmenu: press **Y**) and receives its log on the PC,
   in English, together with screenshots (every 30 s and on **L+R+Minus**): `build/nxlink_logs/<time>/`.
 - `--gpu_trace_path=FILE --gpu_trace_start=N --gpu_trace_frames=K` on the PC build records K frames of GPU commands
-  and the memory they read, from frame N; `python3 -I tools/gputrace.py FILE` summarizes a recording.
+  and the memory they read, from frame N (`--gpu_trace_start=0`: only when **F9** is pressed). With
+  `--readback_resolve=full` Xenia's result of every resolve is kept too. `python3 -I tools/gputrace.py FILE`
+  summarizes a recording.
+- `tools/emu_test.sh FILE [PASSES [FRAME]]` replays a recording in Ryujinx with the Switch build and compares it with
+  the reference; with `FRAME`, every resolve and draw of that frame is listed and saved (`PROBES=`, `PLAIN=` and
+  `tools/resolve_ref.py` narrow a difference down to one draw). The same build replays a recording on the console:
+  `tools/nxlink.sh IP -- --mgrr_replay=sdmc:/switch/mgrr/traces/FILE`.
 
 ---
 
@@ -155,7 +172,11 @@ mgrr-nx/
 │   ├── switch_build/     # Switch toolchain file and the clang build of the game code
 │   ├── nxlink.sh         # network launch with the log and screenshots sent back
 │   ├── gputrace.py       # summary of a GPU recording
+│   ├── emu_test.sh       # graphics test bench: replay in Ryujinx and compare with the reference
+│   ├── imgdiff.py        # image comparison for the bench
+│   ├── resolve_ref.py    # reference images of each resolve of a recording
 │   └── sdk_patches/      # our fixes to rexglue-sdk-nx until they are upstream
+├── docs/screenshots/     # console screenshots for this page
 ├── x360_work/            # reverse-engineering notes: D3D, formats, rendering (addresses and our notes only)
 ├── sdk/                  # rexglue-sdk-nx (submodule)
 ├── PLAN.md               # scope, constraints, milestones, decision log
@@ -171,6 +192,8 @@ mgrr-nx/
 - [ReXGlue](https://github.com/rexglue/rexglue-sdk) and [Xenia](https://github.com/xenia-project/xenia): the recompiler and the
   emulator research it comes from.
 - [hedge-dev](https://github.com/hedge-dev): XenosRecomp, XenonRecomp and UnleashedRecomp.
+- [ds2-nx](https://github.com/VasilkovND/ds2-nx) (VasilkovND): renderer fixes (`tools/sdk_patches/0009-…`) and the
+  emulation of Direct3D's clears, from its notes and code.
 - [devkitPro](https://devkitpro.org): libnx, deko3d, uam and the toolchain.
 
 Metal Gear Rising: Revengeance is © Konami Digital Entertainment, developed by PlatinumGames. This project is not

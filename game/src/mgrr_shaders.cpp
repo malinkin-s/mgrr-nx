@@ -63,6 +63,44 @@ struct RawKeyHash {
   size_t operator()(const RawKey& k) const { return size_t(k.hash ^ (uint64_t(k.words) << 1) ^ k.vertex); }
 };
 
+// The textures a pixel shader fetches that its constant table does not list. The compiler can leave a sampler out of
+// it (MGR's final composite, shader2.filtershadergathernoise, fetches the bloom from s1 and declares only s0, s2 and
+// s3), and the renderer binds what the table says: an undeclared fetch read nothing and the bloom with the red lens
+// flare was missing. So the microcode's texture fetches are added (ds2-nx: "bind what the shader fetches"). Control
+// flow (rex/graphics/format/ucode.h): pairs of 48-bit instructions in 3 words, from the start; exec ones give the
+// address and count of the instructions they run (3 words each) and a fetch bit per instruction.
+void AddFetchedSamplers(EntradaShader& e) {
+  const std::vector<uint32_t>& code = e.microcodigo;
+  size_t first_instruction = code.size() / 3;  // control flow ends where the first executed instruction starts
+  for (size_t pair = 0; pair * 3 + 2 < code.size() && pair * 2 < first_instruction; ++pair) {
+    const uint32_t* w = &code[pair * 3];
+    const uint64_t cf[2] = {uint64_t(w[0]) | (uint64_t(w[1] & 0xFFFF) << 32),
+                            uint64_t((w[1] >> 16) | (w[2] << 16)) | (uint64_t(w[2] >> 16) << 32)};
+    for (uint64_t c : cf) {
+      const uint32_t opcode = uint32_t(c >> 44) & 0xF;
+      // The exec kinds (1-6, 13-14, IsControlFlowOpcodeExec): address 12 bits, count 3, sequence 12 at bit 16.
+      if (!((opcode >= 1 && opcode <= 6) || opcode == 13 || opcode == 14)) continue;
+      const uint32_t address = uint32_t(c) & 0xFFF, count = uint32_t(c >> 12) & 0x7;
+      const uint32_t sequence = uint32_t(c >> 16) & 0xFFF;
+      if (count) first_instruction = std::min<size_t>(first_instruction, address);
+      for (uint32_t i = 0; i < count; ++i) {
+        const size_t at = size_t(address + i) * 3;
+        if (!((sequence >> (i * 2)) & 0x1) || at + 2 >= code.size()) continue;  // ALU, or outside the code
+        if ((code[at] & 0x1F) != 1) continue;  // FetchOpcode::kTextureFetch
+        const uint16_t index = uint16_t((code[at] >> 20) & 0x1F);
+        const bool listed = std::any_of(e.samplers.begin(), e.samplers.end(),
+                                        [&](const SamplerShader& s) { return s.registro == index; });
+        if (listed) continue;
+        SamplerShader s;
+        s.registro = index;
+        const uint32_t dimension = (code[at + 2] >> 14) & 0x3;  // FetchOpDimension: 1D, 2D, 3D/stacked, cube
+        s.tipo = dimension == 2 ? 13 : dimension == 3 ? 14 : 12;  // D3DXPARAMETER_TYPE
+        e.samplers.push_back(s);
+      }
+    }
+  }
+}
+
 }  // namespace
 
 const char* ReadContainer(std::span<const uint8_t> container, EntradaShader& e) {
@@ -128,6 +166,7 @@ const char* ReadContainer(std::span<const uint8_t> container, EntradaShader& e) 
     s.tipo = c.Has(base + type, 4) ? c.U16(base + type + 2) : 0;
     e.samplers.push_back(s);
   }
+  if (!e.vertices) AddFetchedSamplers(e);
   e.huella = HashWords(e.microcodigo);
   return nullptr;
 }
@@ -228,22 +267,41 @@ const EntradaShader* Shaders::Identify(bool vertex, std::span<const uint32_t> mi
   std::lock_guard<std::mutex> guard(d.lock);
   if (auto it = d.cache.find(key); it != d.cache.end()) return it->second;
   ++d.stats.microcode_lookups;
+  // Vertex shaders loaded from the command buffer (IM_LOAD_IMMEDIATE, no CreateXShader address to map back) differ
+  // from their container more than in the fetch bits: D3D also reorders the vertex fetches (each keeps its
+  // destination register, which the renderer matches) and drops exports the pixel shader does not read (a few ALU
+  // words). So the fetch instructions are skipped whole, and the closest entry is taken if it differs in at most
+  // 1/20 of its words. Pixel shaders arrive as compiled: exact match only.
   const EntradaShader* chosen = nullptr;
+  size_t chosen_differences = SIZE_MAX;
   bool ambiguous = false;
   if (auto c = d.by_length.find({vertex, uint32_t(microcode.size())}); c != d.by_length.end()) {
+    const size_t limit = vertex ? microcode.size() / 20 : 0;
     for (uint32_t index : c->second) {
       const EntradaShader& e = d.entries[index];
       d.scratch.assign(microcode.begin(), microcode.end());
-      for (const ElementoVertice& el : e.elementos)
-        for (size_t j = 0; j < 3; ++j) d.scratch[size_t(el.instruccion) * 3 + j] &= kFetchKeep[j];
-      if (d.scratch != e.microcodigo) continue;
-      if (!chosen) {
+      for (const ElementoVertice& el : e.elementos) {
+        const size_t at = size_t(el.instruccion) * 3;
+        std::copy_n(e.microcodigo.begin() + at, 3, d.scratch.begin() + at);
+      }
+      size_t differences = 0;
+      for (size_t i = 0; i < d.scratch.size() && differences <= limit; ++i) {
+        differences += d.scratch[i] != e.microcodigo[i];
+      }
+      if (differences > limit || differences > chosen_differences) continue;
+      if (differences < chosen_differences) {
         chosen = &e;
+        chosen_differences = differences;
+        ambiguous = false;
       } else if (chosen->spirv.size() != e.spirv.size() ||
                  !std::equal(e.spirv.begin(), e.spirv.end(), chosen->spirv.begin())) {
         ambiguous = true;
       }
     }
+  }
+  if (chosen && chosen_differences) {
+    REXLOG_INFO("[shaders] vertex microcode of {} words taken as {} ({} words differ outside the fetches)",
+                microcode.size(), Name(*chosen), chosen_differences);
   }
   d.stats.microcode_found += chosen != nullptr;
   d.stats.microcode_ambiguous += ambiguous;

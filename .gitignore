@@ -1,6 +1,7 @@
 # Whitelist. Only this project's own sources, configs and docs are tracked.
 # NEVER commit game data: extracted ISO, decrypted images, recompiled C++ (ppc*/),
 # extracted or translated shaders, textures, models, renders of game assets, build outputs.
+# Exception: docs/screenshots/, a few console screenshots for the README (the owner's choice).
 /*
 !/.gitignore
 !/.gitmodules

@@ -1,0 +1,16 @@
+diff --git a/include/rex/system/xmemory.h b/include/rex/system/xmemory.h
+index 0c39a42..8ef28c1 100644
+--- a/include/rex/system/xmemory.h
++++ b/include/rex/system/xmemory.h
+@@ -397,6 +397,11 @@ class Memory {
+   // This is often something like 0x200000000.
+   inline uint8_t* physical_membase() const { return physical_membase_; }
+ 
++  // Instead of Initialize: physical addresses translate into a host buffer of 512 MB the caller owns, and nothing
++  // else is set up (no heaps, views or MMIO). For replaying a GPU recording without a guest
++  // (rex/graphics/gpu_trace.h), where only the renderer reads memory, through TranslatePhysical.
++  void InitializePhysicalOnly(uint8_t* physical_base) { physical_membase_ = physical_base; }
++
+   // Translates a guest physical address to a host address that can be accessed
+   // as a normal pointer.
+   // Note that the contents at the specified host address are big-endian.

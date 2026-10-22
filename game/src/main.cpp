@@ -6,6 +6,11 @@
 
 REX_DEFINE_APP(mgrr, MgrrApp::Create)
 
+#if !MGRR_DEKO3D
+REXCVAR_DEFINE_STRING(mgrr_trace_key, "F9", "MGRR",
+                      "PC: the key that records the next frames for the graphics test bench (with --gpu_trace_path)");
+#endif
+
 #if MGRR_DEKO3D
 // Where the NRO is when the loader does not say (Ryujinx passes no argv; tools/emu_test.sh lays out its SD card so).
 const char* RexSwitchDefaultExecutablePath() {

@@ -1,101 +1,11 @@
-diff --git a/src/graphics/CMakeLists.txt b/src/graphics/CMakeLists.txt
-index ea4789c..0948569 100644
---- a/src/graphics/CMakeLists.txt
-+++ b/src/graphics/CMakeLists.txt
-@@ -18,6 +18,7 @@ set(REXGPU_XENOS_SOURCES
-     # GPU system
-     graphics_system.cpp
-     command_processor.cpp
-+    gpu_trace.cpp
-     util/draw_extent_estimator.cpp
-     util/draw.cpp
-     packet_disassembler.cpp
-diff --git a/src/graphics/command_processor.cpp b/src/graphics/command_processor.cpp
-index f80e13a..89fb46d 100644
---- a/src/graphics/command_processor.cpp
-+++ b/src/graphics/command_processor.cpp
-@@ -23,6 +23,7 @@
- #include <rex/chrono/clock.h>
- #include <rex/graphics/command_processor.h>
- #include <rex/graphics/flags.h>
-+#include <rex/graphics/gpu_trace.h>
- #include <rex/graphics/graphics_system.h>
- #include <rex/graphics/pipeline/texture/info.h>
- #include <rex/graphics/sampler_info.h>
-@@ -116,6 +117,7 @@ CommandProcessor::CommandProcessor(GraphicsSystem* graphics_system,
- CommandProcessor::~CommandProcessor() = default;
- 
- bool CommandProcessor::Initialize() {
-+  gpu_trace::Attach(memory_, register_file_);  // mgr-nx: GPU recording (gpu_trace.h)
-   // Initialize the gamma ramps to their default (linear) values - taken from
-   // what games set when starting with the sRGB (return value 1)
-   // VdGetCurrentDisplayGamma.
-@@ -669,12 +671,15 @@ uint32_t CommandProcessor::ExecutePrimaryBuffer(uint32_t read_index, uint32_t wr
-   uint32_t publicado = read_index;
- 
-   do {
-+    const uint32_t packet_start = uint32_t(reader.read_offset() / sizeof(uint32_t));
-     if (!ExecutePacket(&reader)) {
-       // This probably should be fatal - but we're going to continue anyways.
-       REXGPU_ERROR("**** PRIMARY RINGBUFFER: Failed to execute packet.");
-       assert_always();
-       break;
-     }
-+    gpu_trace::PrimaryPacket(memory_->TranslatePhysical(primary_buffer_ptr_), palabras_anillo, packet_start,
-+                             uint32_t(reader.read_offset() / sizeof(uint32_t)));
- 
-     if (read_ptr_writeback_ptr_) {
-       const uint32_t ahora = uint32_t(reader.read_offset() / sizeof(uint32_t));
-@@ -1004,6 +1009,7 @@ bool CommandProcessor::ExecutePacketType3_XE_SWAP(memory::RingBuffer* reader, ui
-   }
- #endif
-   rex::perf::Profiler::Flip();
-+  gpu_trace::Swap();
- 
-   // Xenia-specific VdSwap hook.
-   // VdSwap will post this to tell us we need to swap the screen/fire an
-@@ -1031,6 +1037,7 @@ bool CommandProcessor::ExecutePacketType3_INDIRECT_BUFFER(memory::RingBuffer* re
-   uint32_t list_length = reader->ReadAndSwap<uint32_t>();
-   assert_zero(list_length & ~0xFFFFF);
-   list_length &= 0xFFFFF;
-+  gpu_trace::MemoryRead(GpuToCpu(list_ptr), list_length * 4);
-   ExecuteIndirectBuffer(GpuToCpu(list_ptr), list_length);
-   return true;
- }
-@@ -1584,6 +1591,7 @@ bool CommandProcessor::ExecutePacketType3_IM_LOAD(memory::RingBuffer* reader, ui
-   uint32_t size_dwords = start_size & 0xFFFF;  // dwords
-   assert_true(start == 0);
- 
-+  gpu_trace::MemoryRead(addr, size_dwords * 4);
-   auto shader =
-       LoadShader(shader_type, addr, memory_->TranslatePhysical<uint32_t*>(addr), size_dwords);
-   switch (shader_type) {
-diff --git a/src/graphics/shared_memory.cpp b/src/graphics/shared_memory.cpp
-index ec0df7c..111a766 100644
---- a/src/graphics/shared_memory.cpp
-+++ b/src/graphics/shared_memory.cpp
-@@ -16,6 +16,7 @@
- #include <rex/assert.h>
- #include <rex/bit.h>
- #include <rex/dbg.h>
-+#include <rex/graphics/gpu_trace.h>
- #include <rex/graphics/shared_memory.h>
- #include <rex/math.h>
- #include <rex/memory.h>
-@@ -354,6 +355,7 @@ bool SharedMemory::RequestRanges(const std::pair<uint32_t, uint32_t>* ranges, si
-     if (start > kBufferSize || (kBufferSize - start) < length) {
-       return false;
-     }
-+    gpu_trace::MemoryRead(start, length);  // mgr-nx: GPU recording (gpu_trace.h)
-     merged_ranges.emplace_back(start, length);
-   }
-   if (merged_ranges.empty()) {
-diff --git a/include/rex/graphics/gpu_trace.h b/include/rex/graphics/gpu_trace.h
-new file mode 100644
-index 0000000..5c8348e
+GPU recording for the graphics test bench (rex/graphics/gpu_trace.h): --gpu_trace_path, --gpu_trace_start,
+--gpu_trace_frames; every memory read a draw needs (textures, vertex and index buffers also when cached), the
+reference image of each frame and, with --readback_resolve=full, of each resolve (.res/); --gpu_trace_skip leaves
+draws out to find which one makes something; --gpu_trace_now (F9 in mgr-nx's PC build) records on request.
+
 --- /dev/null
 +++ b/include/rex/graphics/gpu_trace.h
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,73 @@
 +/**
 + * @file        rex/graphics/gpu_trace.h
 + * @brief       Records what the GPU executed for a few frames, to replay them elsewhere (mgr-nx)
@@ -114,6 +24,7 @@ index 0000000..5c8348e
 + *   'P'  one packet of the primary ring, after the 'M's it caused: u32 dword count, the dwords (guest byte order)
 + *   'S'  the end of a frame (a XE_SWAP packet was the last 'P'): u32 frame index from the start
 + *   'E'  end of the recording
++ * Next to it, <FILE>.frame<N>.ppm is the image this renderer presented at the end of recorded frame N.
 + * Replay: apply each 'M' (copy the blob to that address), execute each 'P'. A packet's reads come before it, so the
 + * memory holds what the GPU saw when it ran that packet. Indirect buffers and shader microcode are 'M's too.
 + */
@@ -121,9 +32,13 @@ index 0000000..5c8348e
 +#pragma once
 +
 +#include <cstdint>
++#include <functional>
 +
 +namespace rex::memory {
 +class Memory;
++}
++namespace rex::ui {
++class Presenter;
 +}
 +
 +namespace rex::graphics {
@@ -133,8 +48,9 @@ index 0000000..5c8348e
 +// All no-ops unless a recording is running. Called from the command processor's thread.
 +namespace gpu_trace {
 +
-+// The command processor's memory and registers, once.
-+void Attach(memory::Memory* memory, const RegisterFile* registers);
++// The command processor's memory, registers and presenter, once. After each recorded frame the presenter's output is
++// saved as <gpu_trace_path>.frame<N>.ppm: what this renderer showed, the reference for the replay.
++void Attach(memory::Memory* memory, const RegisterFile* registers, std::function<ui::Presenter*()> presenter);
 +
 +// A primary ring packet has been executed: its dwords are ring[start, end) (in dwords, wrapping at ring_dwords).
 +void PrimaryPacket(const uint8_t* ring, uint32_t ring_dwords, uint32_t start, uint32_t end);
@@ -142,18 +58,30 @@ index 0000000..5c8348e
 +// The GPU reads guest physical memory [address, address + size).
 +void MemoryRead(uint32_t address, uint32_t size);
 +
++// A recording is running (for hooks that cost something to compute).
++bool Recording();
++
++// A draw has been issued. Its index buffer is recorded (the primitive processor reads it only when its converted copy
++// is not cached); in copy mode, the vertices of fetch constant 0 instead: a resolve takes its rectangle from them,
++// which this GPU emulation never reads (it uses the scissor) but a native renderer does.
++// true: do not execute it (gpu_trace_skip, to find which draw makes something in the recorded frames).
++bool Draw();
++
++// A resolve wrote guest memory [address, address + length) (only with --readback_resolve=full, which the
++// recording then needs for these). Saved as <gpu_trace_path>.res/f<frame>_s<copy>.bin with a line in index.txt
++// ("frame copy address length dest_base dest_pitch dest_info copy_control", hex): the reference of each step of the
++// replay's step mode, which numbers the copy draws of a frame the same way.
++void Resolved(uint32_t address, uint32_t length);
++
 +// A XE_SWAP packet is being executed (counted from the start of the process).
 +void Swap();
 +
 +}  // namespace gpu_trace
 +
 +}  // namespace rex::graphics
-diff --git a/src/graphics/gpu_trace.cpp b/src/graphics/gpu_trace.cpp
-new file mode 100644
-index 0000000..4a43a07
 --- /dev/null
 +++ b/src/graphics/gpu_trace.cpp
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,302 @@
 +/**
 + * @file        graphics/gpu_trace.cpp
 + * @brief       GPU recording for replay elsewhere; see rex/graphics/gpu_trace.h (mgr-nx)
@@ -165,7 +93,9 @@ index 0000000..4a43a07
 +#include <rex/graphics/gpu_trace.h>
 +
 +#include <algorithm>
++#include <exception>
 +#include <cstdio>
++#include <filesystem>
 +#include <mutex>
 +#include <string>
 +#include <unordered_set>
@@ -176,13 +106,27 @@ index 0000000..4a43a07
 +
 +#include <rex/cvar.h>
 +#include <rex/graphics/register_file.h>
++#include <rex/graphics/registers.h>
++#include <rex/graphics/xenos.h>
 +#include <rex/logging.h>
 +#include <rex/system/xmemory.h>
++#include <rex/ui/presenter.h>
 +
 +REXCVAR_DEFINE_STRING(gpu_trace_path, "", "GPU",
 +                      "Record GPU frames to this file for replay (rex/graphics/gpu_trace.h); empty = off");
-+REXCVAR_DEFINE_INT32(gpu_trace_start, 600, "GPU", "With gpu_trace_path: first recorded frame (swaps since start)");
++REXCVAR_DEFINE_INT32(gpu_trace_start, 600, "GPU",
++                     "With gpu_trace_path: first recorded frame (swaps since start); 0 = only on request (gpu_trace_now)");
++REXCVAR_DEFINE_STRING(gpu_trace_last, "", "GPU",
++                      "Set when a recording ends: its file (the game writes <file>.shaders next to it)")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
++REXCVAR_DEFINE_BOOL(gpu_trace_now, false, "GPU",
++                    "With gpu_trace_path: record from the next frame on (a key sets it: F9 in mgr-nx's PC build); each "
++                    "request writes <gpu_trace_path without .gtr>_<N>.gtr")
++    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 +REXCVAR_DEFINE_INT32(gpu_trace_frames, 3, "GPU", "With gpu_trace_path: number of frames recorded");
++REXCVAR_DEFINE_STRING(gpu_trace_skip, "", "GPU",
++                      "With gpu_trace_path: draws of each recorded frame not executed, as \"first-last,n\" in the "
++                      "replay's numbering (draws that are not copies, from 0); to find which draw makes something");
 +
 +namespace rex::graphics::gpu_trace {
 +namespace {
@@ -193,12 +137,17 @@ index 0000000..4a43a07
 +  std::mutex lock;
 +  memory::Memory* memory = nullptr;
 +  const RegisterFile* registers = nullptr;
++  std::function<ui::Presenter*()> presenter;
 +  uint64_t swaps = 0;
 +  bool recording = false;
 +  bool done = false;
 +  bool start_after_packet = false;  // the swap that precedes the recording is running
 +  bool swap_in_packet = false;      // the packet being executed is a XE_SWAP of the recording
 +  uint32_t frame = 0;
++  std::string path;       // this recording's file
++  uint32_t requests = 0;  // recordings asked for with gpu_trace_now
++  uint32_t copies = 0;  // copy draws of the frame being recorded
++  uint32_t draws = 0;   // other draws of the frame being recorded
 +  FILE* file = nullptr;
 +  std::unordered_set<uint64_t> blobs;
 +  std::vector<uint8_t> pending;  // the 'B'/'M' records of the packet being executed
@@ -224,7 +173,7 @@ index 0000000..4a43a07
 +}
 +
 +void Start(Trace& t) {
-+  const std::string path = REXCVAR_GET(gpu_trace_path);
++  const std::string& path = t.path;
 +  t.file = std::fopen(path.c_str(), "wb");
 +  if (!t.file) {
 +    REXGPU_ERROR("[gpu_trace] cannot create {}", path);
@@ -240,7 +189,30 @@ index 0000000..4a43a07
 +  Write(t, head);
 +  t.recording = true;
 +  t.frame = 0;
++  t.copies = 0;
++  t.draws = 0;
++  t.blobs.clear();  // each file holds every blob it refers to
++  t.bytes_blobs = t.reads = t.packets = 0;
 +  REXGPU_INFO("[gpu_trace] recording {} frames from swap {} into {}", REXCVAR_GET(gpu_trace_frames), t.swaps, path);
++}
++
++// The presented frame as a binary PPM (no image library in the SDK; tools/emu_test.sh converts and compares).
++void SaveFrame(Trace& t, uint32_t frame) {
++  ui::Presenter* presenter = t.presenter ? t.presenter() : nullptr;
++  ui::RawImage image;
++  if (!presenter || !presenter->CaptureGuestOutput(image)) {
++    REXGPU_WARN("[gpu_trace] frame {}: no image from the presenter", frame);
++    return;
++  }
++  const std::string path = t.path + ".frame" + std::to_string(frame) + ".ppm";
++  FILE* f = std::fopen(path.c_str(), "wb");
++  if (!f) return;
++  std::fprintf(f, "P6\n%u %u\n255\n", image.width, image.height);
++  for (uint32_t y = 0; y < image.height; ++y) {
++    const uint8_t* row = image.data.data() + size_t(y) * image.stride;
++    for (uint32_t x = 0; x < image.width; ++x) std::fwrite(row + x * 4, 1, 3, f);
++  }
++  std::fclose(f);
 +}
 +
 +void Stop(Trace& t) {
@@ -251,17 +223,19 @@ index 0000000..4a43a07
 +  t.file = nullptr;
 +  t.recording = false;
 +  t.done = true;
++  rex::cvar::SetFlagByName("gpu_trace_last", t.path);
 +  REXGPU_INFO("[gpu_trace] done: {} frames, {} packets, {} reads, {} MB of distinct memory", t.frame, t.packets,
 +              t.reads, t.bytes_blobs >> 20);
 +}
 +
 +}  // namespace
 +
-+void Attach(memory::Memory* memory, const RegisterFile* registers) {
++void Attach(memory::Memory* memory, const RegisterFile* registers, std::function<ui::Presenter*()> presenter) {
 +  Trace& t = T();
 +  std::lock_guard<std::mutex> guard(t.lock);
 +  t.memory = memory;
 +  t.registers = registers;
++  t.presenter = std::move(presenter);
 +}
 +
 +void MemoryRead(uint32_t address, uint32_t size) {
@@ -309,11 +283,79 @@ index 0000000..4a43a07
 +    t.swap_in_packet = false;
 +    PutValue<uint8_t>(t.pending, 'S');
 +    PutValue<uint32_t>(t.pending, t.frame);
++    SaveFrame(t, t.frame);
 +    ++t.frame;
++    t.copies = 0;
++    t.draws = 0;
 +  }
 +  Write(t, t.pending);
 +  t.pending.clear();
 +  if (t.frame >= uint32_t(std::max(1, REXCVAR_GET(gpu_trace_frames)))) Stop(t);
++}
++
++bool Recording() { return T().recording; }
++
++// Whether draw number `draw` of the frame is in gpu_trace_skip.
++bool Skipped(uint32_t draw) {
++  const std::string list = REXCVAR_GET(gpu_trace_skip);
++  size_t start = 0;
++  while (start < list.size()) {
++    const size_t end = std::min(list.find(',', start), list.size());
++    const std::string item = list.substr(start, end - start);
++    const size_t dash = item.find('-');
++    try {
++      const uint32_t first = uint32_t(std::stoul(item.substr(0, dash)));
++      const uint32_t last = dash == std::string::npos ? first : uint32_t(std::stoul(item.substr(dash + 1)));
++      if (draw >= first && draw <= last) return true;
++    } catch (const std::exception&) {
++    }
++    start = end + 1;
++  }
++  return false;
++}
++
++bool Draw() {
++  Trace& t = T();
++  if (!t.recording) return false;
++  const RegisterFile& r = *t.registers;
++  if ((r[XE_GPU_REG_RB_MODECONTROL] & 0x7) == uint32_t(xenos::EdramMode::kCopy)) {
++    ++t.copies;  // before the copy runs (Resolved): numbered from 1, the replay's steps from 0
++  } else {
++    const bool skip = Skipped(t.draws++);
++    // The index buffer: the primitive processor only reads it when its converted copy is not cached.
++    const uint32_t initiator = r[XE_GPU_REG_VGT_DRAW_INITIATOR];
++    if (((initiator >> 6) & 0x3) == uint32_t(xenos::SourceSelect::kDMA)) {
++      const uint32_t size_log2 = (initiator >> 11) & 0x1 ? 2 : 1;
++      MemoryRead(r[XE_GPU_REG_VGT_DMA_BASE] & ~((1u << size_log2) - 1), (initiator >> 16) << size_log2);
++    }
++    return skip;
++  }
++  const uint32_t fetch0 = r[XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0];
++  const uint32_t fetch1 = r[XE_GPU_REG_SHADER_CONSTANT_FETCH_00_1];
++  if ((fetch0 & 0x3) != uint32_t(xenos::FetchConstantType::kVertex)) return false;
++  MemoryRead(fetch0 & ~uint32_t(0x3), ((fetch1 >> 2) & 0xFFFFFF) * 4);
++  return false;
++}
++
++void Resolved(uint32_t address, uint32_t length) {
++  Trace& t = T();
++  if (!t.recording || !length) return;
++  std::lock_guard<std::mutex> guard(t.lock);
++  const std::string folder = t.path + ".res";
++  std::error_code error;
++  std::filesystem::create_directories(folder, error);
++  const std::string name = "f" + std::to_string(t.frame) + "_s" + std::to_string(t.copies) + ".bin";
++  if (FILE* f = std::fopen((folder + "/" + name).c_str(), "wb")) {
++    std::fwrite(t.memory->TranslatePhysical(address), 1, length, f);
++    std::fclose(f);
++  }
++  if (FILE* f = std::fopen((folder + "/index.txt").c_str(), "a")) {
++    const RegisterFile& r = *t.registers;
++    std::fprintf(f, "%u %u %08X %X %08X %08X %08X %08X\n", t.frame, t.copies, address, length,
++                 r[XE_GPU_REG_RB_COPY_DEST_BASE], r[XE_GPU_REG_RB_COPY_DEST_PITCH], r[XE_GPU_REG_RB_COPY_DEST_INFO],
++                 r[XE_GPU_REG_RB_COPY_CONTROL]);
++    std::fclose(f);
++  }
 +}
 +
 +void Swap() {
@@ -324,13 +366,189 @@ index 0000000..4a43a07
 +    t.swap_in_packet = true;  // marked after the packet (PrimaryPacket)
 +    return;
 +  }
-+  if (t.done || !t.memory || !t.registers) return;
-+  if (REXCVAR_GET(gpu_trace_path).empty()) {
-+    t.done = true;
-+    return;
++  if (!t.memory || !t.registers || t.start_after_packet) return;
++  const std::string base = REXCVAR_GET(gpu_trace_path);
++  if (base.empty()) return;
++  // Starts after this swap, so the first recorded packet begins a frame: at swap gpu_trace_start, or when asked.
++  if (REXCVAR_GET(gpu_trace_now)) {
++    rex::cvar::SetFlagByName("gpu_trace_now", "false");
++    const std::string stem = base.size() > 4 && base.compare(base.size() - 4, 4, ".gtr") == 0
++                                 ? base.substr(0, base.size() - 4)
++                                 : base;
++    t.path = stem + "_" + std::to_string(++t.requests) + ".gtr";
++    t.start_after_packet = true;
++  } else if (!t.done && REXCVAR_GET(gpu_trace_start) > 0 && t.swaps == uint64_t(REXCVAR_GET(gpu_trace_start))) {
++    t.path = base;
++    t.start_after_packet = true;
 +  }
-+  // Starts after swap number gpu_trace_start, so the first recorded packet begins a frame.
-+  if (t.swaps == uint64_t(std::max(1, REXCVAR_GET(gpu_trace_start)))) t.start_after_packet = true;
 +}
 +
 +}  // namespace rex::graphics::gpu_trace
+--- a/src/graphics/CMakeLists.txt
++++ b/src/graphics/CMakeLists.txt
+@@ -18,6 +18,7 @@
+     # GPU system
+     graphics_system.cpp
+     command_processor.cpp
++    gpu_trace.cpp
+     util/draw_extent_estimator.cpp
+     util/draw.cpp
+     packet_disassembler.cpp
+--- a/src/graphics/command_processor.cpp
++++ b/src/graphics/command_processor.cpp
+@@ -23,6 +23,7 @@
+ #include <rex/chrono/clock.h>
+ #include <rex/graphics/command_processor.h>
+ #include <rex/graphics/flags.h>
++#include <rex/graphics/gpu_trace.h>
+ #include <rex/graphics/graphics_system.h>
+ #include <rex/graphics/pipeline/texture/info.h>
+ #include <rex/graphics/sampler_info.h>
+@@ -116,6 +117,8 @@
+ CommandProcessor::~CommandProcessor() = default;
+ 
+ bool CommandProcessor::Initialize() {
++  // mgr-nx: GPU recording (gpu_trace.h), with the presented frames as the reference images
++  gpu_trace::Attach(memory_, register_file_, [this]() { return graphics_system_->presenter(); });
+   // Initialize the gamma ramps to their default (linear) values - taken from
+   // what games set when starting with the sRGB (return value 1)
+   // VdGetCurrentDisplayGamma.
+@@ -669,12 +672,15 @@
+   uint32_t publicado = read_index;
+ 
+   do {
++    const uint32_t packet_start = uint32_t(reader.read_offset() / sizeof(uint32_t));
+     if (!ExecutePacket(&reader)) {
+       // This probably should be fatal - but we're going to continue anyways.
+       REXGPU_ERROR("**** PRIMARY RINGBUFFER: Failed to execute packet.");
+       assert_always();
+       break;
+     }
++    gpu_trace::PrimaryPacket(memory_->TranslatePhysical(primary_buffer_ptr_), palabras_anillo, packet_start,
++                             uint32_t(reader.read_offset() / sizeof(uint32_t)));
+ 
+     if (read_ptr_writeback_ptr_) {
+       const uint32_t ahora = uint32_t(reader.read_offset() / sizeof(uint32_t));
+@@ -1004,6 +1010,7 @@
+   }
+ #endif
+   rex::perf::Profiler::Flip();
++  gpu_trace::Swap();
+ 
+   // Xenia-specific VdSwap hook.
+   // VdSwap will post this to tell us we need to swap the screen/fire an
+@@ -1031,6 +1038,7 @@
+   uint32_t list_length = reader->ReadAndSwap<uint32_t>();
+   assert_zero(list_length & ~0xFFFFF);
+   list_length &= 0xFFFFF;
++  gpu_trace::MemoryRead(GpuToCpu(list_ptr), list_length * 4);
+   ExecuteIndirectBuffer(GpuToCpu(list_ptr), list_length);
+   return true;
+ }
+@@ -1428,6 +1436,9 @@
+   // we don't support yet.
+   reader->AdvanceRead(count_remaining * sizeof(uint32_t));
+ 
++  if (draw_succeeded && gpu_trace::Draw()) {
++    return true;  // mgr-nx: left out of a recording on purpose (gpu_trace_skip)
++  }
+   if (draw_succeeded) {
+     auto viz_query = register_file_->Get<reg::PA_SC_VIZ_QUERY>();
+     if (!(viz_query.viz_query_ena && viz_query.kill_pix_post_hi_z)) {
+@@ -1584,6 +1595,7 @@
+   uint32_t size_dwords = start_size & 0xFFFF;  // dwords
+   assert_true(start == 0);
+ 
++  gpu_trace::MemoryRead(addr, size_dwords * 4);
+   auto shader =
+       LoadShader(shader_type, addr, memory_->TranslatePhysical<uint32_t*>(addr), size_dwords);
+   switch (shader_type) {
+--- a/src/graphics/shared_memory.cpp
++++ b/src/graphics/shared_memory.cpp
+@@ -16,6 +16,7 @@
+ #include <rex/assert.h>
+ #include <rex/bit.h>
+ #include <rex/dbg.h>
++#include <rex/graphics/gpu_trace.h>
+ #include <rex/graphics/shared_memory.h>
+ #include <rex/math.h>
+ #include <rex/memory.h>
+@@ -354,6 +355,7 @@
+     if (start > kBufferSize || (kBufferSize - start) < length) {
+       return false;
+     }
++    gpu_trace::MemoryRead(start, length);  // mgr-nx: GPU recording (gpu_trace.h)
+     merged_ranges.emplace_back(start, length);
+   }
+   if (merged_ranges.empty()) {
+--- a/src/graphics/pipeline/texture/cache.cpp
++++ b/src/graphics/pipeline/texture/cache.cpp
+@@ -18,6 +18,7 @@
+ #include <rex/cvar.h>
+ #include <rex/dbg.h>
+ #include <rex/graphics/flags.h>
++#include <rex/graphics/gpu_trace.h>
+ #include <rex/graphics/pipeline/texture/cache.h>
+ #include <rex/graphics/pipeline/texture/info.h>
+ #include <rex/graphics/pipeline/texture/util.h>
+@@ -561,6 +562,26 @@
+     }
+   }
+ 
++  // mgr-nx: a GPU recording (gpu_trace.h) needs every texture a draw uses, also those loaded before it started.
++  if (gpu_trace::Recording()) {
++    uint32_t used = used_texture_mask;
++    while (rex::bit_scan_forward(used, &index)) {
++      used &= ~(UINT32_C(1) << index);
++      for (const Texture* texture : {texture_bindings_[index].texture, texture_bindings_[index].texture_signed}) {
++        if (texture == nullptr) {
++          continue;
++        }
++        const TextureKey& key = texture->key();
++        if (key.base_page) {
++          gpu_trace::MemoryRead(key.base_page << 12, texture->GetGuestBaseSize());
++        }
++        if (key.mip_page) {
++          gpu_trace::MemoryRead(key.mip_page << 12, texture->GetGuestMipsSize());
++        }
++      }
++    }
++  }
++
+   COUNT_profile_set("gpu/texture_cache/request_textures_pending_load_count",
+                     uint32_t(pending_texture_loads.size()));
+   COUNT_profile_set("gpu/texture_cache/request_textures_pending_range_count",
+--- a/src/graphics/vulkan/command_processor.cpp
++++ b/src/graphics/vulkan/command_processor.cpp
+@@ -30,6 +30,7 @@
+ #include <rex/math.h>
+ #include <rex/graphics/util/draw.h>
+ #include <rex/graphics/flags.h>
++#include <rex/graphics/gpu_trace.h>
+ #include <rex/graphics/pipeline/shader/shader.h>
+ #include <rex/graphics/pipeline/shader/spirv_translator.h>
+ #include <rex/graphics/registers.h>
+@@ -3986,6 +3987,13 @@
+       vfetch_bits_remaining &= ~(uint32_t(1) << j);
+       uint32_t vfetch_index = i * 32 + j;
+       uint64_t vfetch_bit = uint64_t(1) << (vfetch_index & 63);
++      // mgr-nx: a GPU recording needs the buffer also when it is already in sync (gpu_trace.h).
++      if (gpu_trace::Recording()) {
++        const xenos::xe_gpu_vertex_fetch_t recorded = regs.GetVertexFetch(vfetch_index);
++        if (recorded.type == xenos::FetchConstantType::kVertex) {
++          gpu_trace::MemoryRead(recorded.address << 2, recorded.size << 2);
++        }
++      }
+       if (vertex_buffers_in_sync_[vfetch_index >> 6] & vfetch_bit) {
+         continue;
+       }
+@@ -4682,6 +4690,9 @@
+     uint8_t* destination = memory_->TranslatePhysical(written_address);
+     if (destination) {
+       std::memcpy(destination, readback.mapped_data[read_index], written_length);
++      if (!use_delayed_sync) {
++        gpu_trace::Resolved(written_address, written_length);  // mgr-nx: reference of this resolve (gpu_trace.h)
++      }
+     }
+   }
+ 

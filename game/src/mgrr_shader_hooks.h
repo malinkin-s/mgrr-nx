@@ -31,7 +31,7 @@ bool WriteCopies(const char* path);
 // A copy known from elsewhere (a recording's table), as Record would have added it.
 void AddCopy(uint32_t physical_address, uint32_t bytes, const rex::x360::EntradaShader* entry);
 
-// Called once per guest frame (mgrr_draw_stats.cpp): writes <gpu_trace_path>.shaders once a GPU recording is over.
+// Called once per guest frame (mgrr_draw_stats.cpp): writes <file>.shaders when a GPU recording ends (gpu_trace_last).
 void OnFrameForTrace(uint64_t frame);
 
 }  // namespace mgrr::shaders

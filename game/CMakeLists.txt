@@ -30,8 +30,8 @@ add_executable(mgrr ${MGRR_SOURCES})
 if(REXGLUE_PLATFORM_SWITCH)
     # Configure with the devkitPro Switch.cmake toolchain, -DREXGLUE_PLATFORM_SWITCH=ON -DREXGLUE_SWITCH_DEKO3D=ON.
     # No GPU emulation on Switch: the deko3d renderer of the port draws (M2).
-    # src/mgrr_gpu.cpp stands in for the GPU (ring reader, interrupts, GPU memory writes); nothing is drawn yet.
-    target_sources(mgrr PRIVATE src/mgrr_gpu.cpp src/mgrr_nxlink.cpp)
+    # src/mgrr_gpu.cpp stands in for the GPU (ring reader, interrupts); src/mgrr_pm4.cpp decodes the packets.
+    target_sources(mgrr PRIVATE src/mgrr_gpu.cpp src/mgrr_nxlink.cpp src/mgrr_pm4.cpp src/mgrr_replay.cpp)
     rexglue_setup_target(mgrr)
     rexglue_switch_add_deko3d(mgrr)
     target_compile_definitions(mgrr PRIVATE MGRR_DEKO3D=1)
