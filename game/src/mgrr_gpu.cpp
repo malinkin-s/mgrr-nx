@@ -53,6 +53,8 @@
 #endif
 
 #include "mgrr_pm4.h"
+#include "mgrr_shader_hooks.h"
+#include "mgrr_shaders.h"
 #include "mgrr_stats.h"
 
 namespace mgrr::gpu {
@@ -287,6 +289,9 @@ class RingGraphicsSystem final : public rex::system::IGraphicsSystem, public mgr
         static_cast<rex::deko3d::ProveedorDeko3d*>(provider_.get()), memory_);
     if (destinos_) {
       REXLOG_INFO("[gpu] deko3d renderer backend up");
+      // The whole library compiles ahead when the worker is idle; what the cache on the SD card already has is skipped.
+      const auto all = mgrr::shaders::Library().All();
+      destinos_->Precompilar(all, false);
     }
     return destinos_.get();
   }
@@ -303,6 +308,10 @@ class RingGraphicsSystem final : public rex::system::IGraphicsSystem, public mgr
   void Swap(uint32_t width, uint32_t height) override {
     counter_.fetch_add(1, std::memory_order_relaxed);
     if (rex::x360::DestinosNativos* renderer = Renderer()) {
+      // Shaders of the scene being loaded go ahead of the rest of the library.
+      if (const auto created = mgrr::shaders::Library().TakeCreated(); !created.empty()) {
+        renderer->Precompilar(created, true);
+      }
       renderer->Presentar(presenter_.get(), rex::x360::LeerTexturaSwap(decoder_->registers().data()), width,
                           height);
     }

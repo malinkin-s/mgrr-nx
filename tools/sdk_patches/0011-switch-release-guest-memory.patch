@@ -1,0 +1,116 @@
+Switch: give guest memory back to the heap when the game frees it.
+
+The guest heaps' Release/Decommit never reached the host, so on Switch every guest page ever
+touched stayed backed by heap memory: a session through training and a mission reached 3185 of
+3189 MB, and leaving to the menu then failed to create a thread (C0000017) and hung on a black
+screen. BaseHeap::Release/Decommit now call DeallocFixed, which frees the committed chunks
+entirely inside the range (RexGmDecommit, also made to look only at the chunks in the range).
+--switch_release_guest_memory=false restores the old behaviour.
+
+diff --git i/src/core/guest_memory_switch.cpp w/src/core/guest_memory_switch.cpp
+index 801d903..b11bd18 100644
+--- i/src/core/guest_memory_switch.cpp
++++ w/src/core/guest_memory_switch.cpp
+@@ -632,7 +632,8 @@ bool RexGmDecommit(size_t offset, size_t length) {
+     const size_t begin = AlignDown(offset, kPageSize);
+     const size_t end   = AlignUp(offset + length, kPageSize);
+ 
+-    for (auto it = s.chunks.begin(); it != s.chunks.end();) {
++    /* Keyed by offset: only the chunks that start inside the range can be inside it. */
++    for (auto it = s.chunks.lower_bound(begin); it != s.chunks.end() && it->first < end;) {
+         const Chunk c = it->second;
+         /*
+          * Only chunks entirely contained in the range are freed: splitting a chunk
+diff --git i/src/core/memory_switch.cpp w/src/core/memory_switch.cpp
+index 3be0c35..eead280 100644
+--- i/src/core/memory_switch.cpp
++++ w/src/core/memory_switch.cpp
+@@ -24,12 +24,14 @@
+  *    of not being able to change permissions on the window (ProcessMem lacks
+  *    PermChangeAllowed; measured).
+  *
+- * 3. Freeing does not return memory to the system. Decommit and Release only
+- *    remove access in that view. The backing stays until the mapping is closed.
+- *    The same happens on Linux, where the heap lives in shared memory and
+- *    madvise(DONTNEED) on a shared mapping does not release the pages. And it is
+- *    required: the same backing is mirrored in other views, and releasing it
+- *    from one would take it away from all of them.
++ * 3. Freeing returns to the heap only the committed chunks that lie entirely
++ *    inside the freed range; a chunk partly in use stays. The guest heaps call it
++ *    (BaseHeap::Release/Decommit, --switch_release_guest_memory) when the game
++ *    frees memory, which frees it in every view: on the 360 a physical page has
++ *    one owner, and freeing it through any of its addresses frees it for all.
++ *    Without it every page the game ever touched stayed backed, and leaving a
++ *    mission to the menu ran the process out of memory (Linux keeps them too,
++ *    in its shared-memory file, but there memory is not that short).
+  */
+ 
+ #include <rex/platform.h>
+@@ -216,12 +218,16 @@ bool DeallocFixed(void* base_address, size_t length, DeallocationType deallocati
+     return false;
+   }
+ 
+-  // Both Decommit and Release only remove access in this view. See the file
+-  // header: releasing the backing would remove it from every mirror.
++  // Both give back the chunks entirely inside the range (file header, point 3).
+   switch (deallocation_type) {
+     case DeallocationType::kDecommit:
+-    case DeallocationType::kRelease:
+-      return RexGmProtect(static_cast<uint8_t*>(base_address), length, REX_GM_NONE, nullptr);
++    case DeallocationType::kRelease: {
++      size_t offset = 0;
++      if (!RexGmWindowToOffset(reinterpret_cast<uint64_t>(base_address), &offset)) {
++        return false;
++      }
++      return RexGmDecommit(offset, length);
++    }
+     default:
+       return false;
+   }
+diff --git i/src/system/xmemory.cpp w/src/system/xmemory.cpp
+index 9ab905b..29cd3c5 100644
+--- i/src/system/xmemory.cpp
++++ w/src/system/xmemory.cpp
+@@ -36,6 +36,11 @@
+ REXCVAR_DEFINE_BOOL(protect_zero, true, "Memory", "Protect the zero page from reads and writes")
+     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+ 
++#if REX_PLATFORM_SWITCH
++REXCVAR_DEFINE_BOOL(switch_release_guest_memory, true, "Memory",
++                    "Give the heap memory of guest pages back when the game frees them (Switch). Off: "
++                    "every page ever touched stays backed until exit");
++#endif
+ REXCVAR_DEFINE_BOOL(protect_on_release, false, "Memory",
+                     "Protect released memory to prevent accesses");
+ 
+@@ -1619,6 +1624,15 @@ bool BaseHeap::Decommit(uint32_t address, uint32_t size) {
+     return false;
+   }*/
+ 
++#if REX_PLATFORM_SWITCH
++  // On Switch the backing is heap memory, and it is short (memory_switch.cpp, point 3).
++  if (REXCVAR_GET(switch_release_guest_memory)) {
++    rex::memory::DeallocFixed(TranslateRelative(start_page_number << page_size_shift_),
++                              size_t(end_page_number - start_page_number + 1) << page_size_shift_,
++                              rex::memory::DeallocationType::kDecommit);
++  }
++#endif
++
+   // Perform table change.
+   for (uint32_t page_number = start_page_number; page_number <= end_page_number; ++page_number) {
+     auto& page_entry = page_table_[page_number];
+@@ -1679,6 +1693,14 @@ bool BaseHeap::Release(uint32_t base_address, uint32_t* out_region_size) {
+     }
+   }
+ 
++#if REX_PLATFORM_SWITCH
++  if (REXCVAR_GET(switch_release_guest_memory)) {
++    rex::memory::DeallocFixed(TranslateRelative(base_page_number << page_size_shift_),
++                              size_t(base_page_entry.region_page_count) << page_size_shift_,
++                              rex::memory::DeallocationType::kRelease);
++  }
++#endif
++
+   // Perform table change.
+   uint32_t end_page_number = base_page_number + base_page_entry.region_page_count - 1;
+   for (uint32_t page_number = base_page_number; page_number <= end_page_number; ++page_number) {

@@ -10,6 +10,8 @@
 #include <map>
 #include <mutex>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <rex/logging.h>
@@ -180,6 +182,8 @@ struct Shaders::Data {
   std::mutex lock;  // cache and stats
   std::unordered_map<RawKey, const EntradaShader*, RawKeyHash> cache;
   std::vector<uint32_t> scratch;
+  std::vector<const EntradaShader*> created;  // under lock: TakeCreated
+  std::unordered_set<const EntradaShader*> created_seen;
   Stats stats;
   bool loaded = false;
 };
@@ -257,7 +261,21 @@ const EntradaShader* Shaders::FindContainer(std::span<const uint8_t> container) 
   std::lock_guard<std::mutex> guard(d.lock);
   ++d.stats.containers_seen;
   d.stats.containers_found += e != nullptr;
+  if (e && d.created_seen.insert(e).second) d.created.push_back(e);
   return e;
+}
+
+std::vector<const EntradaShader*> Shaders::All() const {
+  std::vector<const EntradaShader*> all;
+  if (!data_->loaded) return all;
+  all.reserve(data_->entries.size());
+  for (const EntradaShader& e : data_->entries) all.push_back(&e);
+  return all;
+}
+
+std::vector<const EntradaShader*> Shaders::TakeCreated() {
+  std::lock_guard<std::mutex> guard(data_->lock);
+  return std::exchange(data_->created, {});
 }
 
 const EntradaShader* Shaders::Identify(bool vertex, std::span<const uint32_t> microcode) {

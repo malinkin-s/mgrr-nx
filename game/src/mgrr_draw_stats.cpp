@@ -24,6 +24,13 @@
 #include "mgrr_shader_hooks.h"
 #include "mgrr_stats.h"
 
+#if defined(__SWITCH__)
+#include <malloc.h>
+#include <switch.h>
+extern "C" size_t RexGmCommittedBytes(void);
+extern "C" size_t RexGmMappedBytes(void);
+#endif
+
 #if MGRR_DEKO3D
 #define MGRR_DRAW_STATS_DEFAULT true   // Switch test builds: the log is the only output for now
 #else
@@ -124,6 +131,16 @@ void EndFrame() {
       secs, n, double(n) / secs, double(sum) / double(n), p50, p95, mx,
       sum ? 100.0 * double(g_win.indexed) / double(sum) : 0.0, double(g_win.prims) / double(n),
       double(g_win.resolves) / double(n), g_win.total_frames, g_win.max_ever);
+#if defined(__SWITCH__)
+  // Where the process memory goes: running out of it stops thread creation (the hang on leaving to the menu).
+  u64 used = 0, total = 0;
+  svcGetInfo(&used, InfoType_UsedMemorySize, CUR_PROCESS_HANDLE, 0);
+  svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+  const struct mallinfo heap = mallinfo();
+  REXLOG_INFO("[mem] process {} of {} MB | heap {} MB in use, {} MB free | guest backing {} MB (mapped {} MB with mirrors)",
+              used >> 20, total >> 20, size_t(heap.uordblks) >> 20, size_t(heap.fordblks) >> 20,
+              RexGmCommittedBytes() >> 20, RexGmMappedBytes() >> 20);
+#endif
   v.clear();
   g_win.indexed = g_win.prims = g_win.resolves = 0;
   g_win.start = now;

@@ -47,6 +47,11 @@ class Shaders {
   // The entry of a container by its hash (EntradaShader::huella_contenedor), or nullptr: a recording's shader table.
   const rex::x360::EntradaShader* FindContainerHash(uint64_t hash) const;
 
+  // Every entry, and the ones the game created (FindContainer found them) since the last call: shaders to
+  // compile ahead (DestinosNativos::Precompilar). Each entry is taken once.
+  std::vector<const rex::x360::EntradaShader*> All() const;
+  std::vector<const rex::x360::EntradaShader*> TakeCreated();
+
   // The library name of an entry ("shader.deferredcomposition"), for reports.
   const char* Name(const rex::x360::EntradaShader& entry) const;
 

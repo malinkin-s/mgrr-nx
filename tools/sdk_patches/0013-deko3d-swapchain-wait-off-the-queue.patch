@@ -1,0 +1,100 @@
+deko3d: wait for a swapchain image on the UI thread, not in the GPU queue.
+
+The renderer and the presenter share one deko3d queue, and Adquirir put the wait for the acquired
+swapchain image's fence into it (dkQueueWaitFence): until the display let go of the image (up to a
+vblank) the queue also held the game's next frames, already submitted. In MGR's mission that was
+5-6 ms of idle GPU per frame on 21 ms of work. The fence is now waited for with dkFenceWait on the
+UI thread, which only presents; the time is reported with the renderer's per-frame figures.
+
+diff --git i/include/rex/ui/deko3d/nucleo.h w/include/rex/ui/deko3d/nucleo.h
+index 18a7ed6..25a960f 100644
+--- i/include/rex/ui/deko3d/nucleo.h
++++ w/include/rex/ui/deko3d/nucleo.h
+@@ -25,6 +25,7 @@
+ 
+ #include <deko3d.h>
+ 
++#include <atomic>
+ #include <cstdint>
+ #include <mutex>
+ #include <span>
+@@ -85,7 +86,9 @@ class Dispositivo {
+   void Enviar(DkCmdList primera, DkCmdList segunda, const char* que);
+   // Waits until the GPU has finished everything submitted.
+   void EsperarInactiva();
++  // A swapchain image, once the display has let go of it (waited for on the calling thread, not in the queue).
+   int Adquirir(DkSwapchain cadena);
++  uint64_t NsEsperandoImagen() const { return ns_esperando_imagen_.load(std::memory_order_relaxed); }
+   void Presentar(DkSwapchain cadena, int imagen);
+   // Stops the process if a GPU fault left the queue in an error state; `antes_de` names the call that was next.
+   // The caller holds the lock (the methods above check it themselves).
+@@ -96,6 +99,7 @@ class Dispositivo {
+   DkQueue cola_ = nullptr;
+   std::mutex candado_;
+   std::mutex creaciones_;
++  std::atomic<uint64_t> ns_esperando_imagen_{0};
+ };
+ 
+ struct ConfigNucleo {
+diff --git i/include/rex/x360/deko/render.h w/include/rex/x360/deko/render.h
+index fc23f0b..0a5f279 100644
+--- i/include/rex/x360/deko/render.h
++++ w/include/rex/x360/deko/render.h
+@@ -764,6 +764,7 @@ class RenderDk final : public DestinosNativos {
+   uint64_t informe_copias_ = 0, informe_borrados_ = 0, informe_barreras_ = 0, informe_creadas_ = 0;
+   uint64_t informe_subidas_ = 0, informe_bytes_subidos_ = 0, informe_ns_grabando_ = 0, informe_lecturas_ = 0;
+   uint64_t informe_gpu_ns_ = 0, informe_gpu_trabajos_ = 0, informe_espera_ns_ = 0, informe_saltados_ = 0;
++  uint64_t informe_espera_imagen_ns_ = 0;
+   uint64_t informe_z_temprana_ = 0;
+   std::array<uint64_t, kGpuCategorias> informe_categorias_{};
+ };
+diff --git i/src/ui/deko3d/nucleo.cpp w/src/ui/deko3d/nucleo.cpp
+index f694e07..d68ca9c 100644
+--- i/src/ui/deko3d/nucleo.cpp
++++ w/src/ui/deko3d/nucleo.cpp
+@@ -190,13 +190,15 @@ void Dispositivo::EsperarInactiva() {
+ 
+ int Dispositivo::Adquirir(DkSwapchain cadena) {
+   // The acquire may wait for the window to give an image back: without the queue lock, so the ring thread can keep
+-  // submitting; only the GPU wait for that image goes into the queue.
++  // submitting. The image's own fence is waited for here, on the calling (UI) thread, not in the queue: the queue is
++  // the ring thread's too, and a wait in it held the game's next frames until the display let go of the image (up
++  // to a vblank). In the mission that was 5-6 ms of idle GPU per frame.
+   int imagen = 0;
+   DkFence valla;
+   dkSwapchainAcquireImage(cadena, &imagen, &valla);
+-  std::lock_guard<std::mutex> cerrojo(candado_);
+-  ComprobarCola("waiting for a swapchain image");
+-  dkQueueWaitFence(cola_, &valla);
++  const uint64_t antes = AhoraNs();
++  dkFenceWait(&valla, -1);
++  ns_esperando_imagen_.fetch_add(AhoraNs() - antes, std::memory_order_relaxed);
+   return imagen;
+ }
+ 
+diff --git i/src/x360/deko/destinos.cpp w/src/x360/deko/destinos.cpp
+index 7c7e7b5..3d280d9 100644
+--- i/src/x360/deko/destinos.cpp
++++ w/src/x360/deko/destinos.cpp
+@@ -2186,6 +2186,7 @@ void RenderDk::InformePeriodico() {
+     informe_gpu_ns_ = gpu_ns_;
+     informe_gpu_trabajos_ = gpu_trabajos_;
+     informe_espera_ns_ = nucleo_.NsEsperandoValla();
++    informe_espera_imagen_ns_ = nucleo_.disp().NsEsperandoImagen();
+     informe_saltados_ = borrados_saltados_;
+     informe_z_temprana_ = dibujos_z_temprana_;
+     informe_categorias_ = gpu_categorias_ns_;
+@@ -2242,10 +2243,12 @@ void RenderDk::InformePeriodico() {
+   X360_INFORME(
+       "[deko3d] per frame: GPU shadows {:.2f} ms, scene {:.2f}, reflection {:.2f}, 320 {:.2f}, minor {:.2f}, copies "
+       "{:.2f}, clears {:.2f}, rest {:.2f}, scene without depth {:.2f}, GPU idle between jobs {:.2f}; the ring "
+-      "waited for the GPU {:.2f} ms; clears skipped {:.1f}; draws with early Z {:.0f}",
++      "waited for the GPU {:.2f} ms, the UI thread for a swapchain image {:.2f} ms; clears skipped {:.1f}; draws "
++      "with early Z {:.0f}",
+       ms(kGpuSombras), ms(kGpuEscena), ms(kGpuReflejo), ms(kGpu320), ms(kGpuMenores), ms(kGpuCopias), ms(kGpuBorrados),
+       ms(kGpuOtros), ms(kGpuEscenaSinProfundidad), ms(kGpuHuecoEntreTrabajos),
+       double(nucleo_.NsEsperandoValla() - informe_espera_ns_) / 1e6 / fotogramas,
++      double(nucleo_.disp().NsEsperandoImagen() - informe_espera_imagen_ns_) / 1e6 / fotogramas,
+       double(borrados_saltados_ - informe_saltados_) / fotogramas,
+       double(dibujos_z_temprana_ - informe_z_temprana_) / fotogramas);
+   const auto us = [&](uint32_t e) { return dibujos ? double(ns_etapas_[e] - informe_etapas_[e]) / double(dibujos) / 1e3 : 0.0; };

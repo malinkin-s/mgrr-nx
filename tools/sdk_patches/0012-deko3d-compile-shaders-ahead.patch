@@ -1,0 +1,206 @@
+deko3d: compile shaders ahead, in the background.
+
+A shader missing from the DKSH cache compiled on the spot on the ring thread (10-200 ms each on
+the console), so a new scene stood on a black screen for many seconds. DestinosNativos::Precompilar
+takes shaders to compile on the worker before a draw needs them: the ones a scene being loaded
+creates first, then the rest; RenderDk feeds the worker at most two at a time, once per Swap.
+Compilar (a draw waiting for its shader) now jumps the worker's queue. --deko_precompilar=false
+turns it off.
+
+diff --git i/include/rex/ui/deko3d/compilador.h w/include/rex/ui/deko3d/compilador.h
+index 3d08ec3..2661285 100644
+--- i/include/rex/ui/deko3d/compilador.h
++++ w/include/rex/ui/deko3d/compilador.h
+@@ -31,7 +31,8 @@ class Compilador {
+   Compilador(const Compilador&) = delete;
+   Compilador& operator=(const Compilador&) = delete;
+ 
+-  // GLSL to DKSH, waiting for the result (the presenter's own shaders, at start).
++  // GLSL to DKSH, waiting for the result (the presenter's own shaders, at start). It goes ahead of the queued
++  // work, so a draw that needs it waits for at most the compile in progress.
+   Resultado Compilar(bool vertices, std::string glsl);
+   // The same without waiting: `hecho` runs on the worker thread.
+   void Encolar(bool vertices, std::string glsl, Hecho hecho);
+diff --git i/include/rex/x360/deko/render.h w/include/rex/x360/deko/render.h
+index 449a1cc..fc23f0b 100644
+--- i/include/rex/x360/deko/render.h
++++ w/include/rex/x360/deko/render.h
+@@ -25,6 +25,7 @@
+ 
+ #include <array>
+ #include <cstdint>
++#include <deque>
+ #include <memory>
+ #include <mutex>
+ #include <string>
+@@ -165,6 +166,7 @@ class RenderDk final : public DestinosNativos {
+   void EstadisticasOclusion(uint64_t valores[5]) const override;
+   bool Dibujar(const PeticionDibujo& peticion) override;  // nfsmw_dk_dibujos.cpp
+   void PedirVolcado() override { volcado_pedido_ = true; }
++  void Precompilar(std::span<const EntradaShader* const> shaders, bool pronto) override;
+   EstadisticasDibujos EstadisticasDeDibujos() const override;
+   void EsperarSubidas() override {}  // vertices are copied on the ring thread, before Dibujar returns
+   uint64_t CopiasProfundidad() const override { return copias_profundidad_; }
+@@ -429,6 +431,7 @@ class RenderDk final : public DestinosNativos {
+   };
+   InfoShader& InfoDe(const EntradaShader& entrada);
+   void RecogerCompilaciones();
++  void AvanzarPrecompilacion();
+ 
+   // ---- Textures, samplers and descriptors (nfsmw_dk_texturas.cpp)
+   struct FormatoDk {
+@@ -574,6 +577,11 @@ class RenderDk final : public DestinosNativos {
+   };
+   std::shared_ptr<Bandeja> bandeja_ = std::make_shared<Bandeja>();
+   std::unordered_map<uint64_t, bool> en_fondo_;  // keys queued (by a hash of the key)
++  // Precompilar: shaders waiting to be compiled ahead (any thread adds, the ring thread takes).
++  std::mutex precompilar_candado_;
++  std::deque<const EntradaShader*> precompilar_pronto_, precompilar_resto_;
++  uint32_t precompilados_ = 0, precompilar_en_cache_ = 0;
++  bool precompilar_avisado_ = true;
+   DkShader fs_vacio_{};
+   bool fs_vacio_valido_ = false;
+ 
+diff --git i/include/rex/x360/destinos.h w/include/rex/x360/destinos.h
+index fb2abd6..1424869 100644
+--- i/include/rex/x360/destinos.h
++++ w/include/rex/x360/destinos.h
+@@ -17,6 +17,7 @@
+ #include <array>
+ #include <cstdint>
+ #include <memory>
++#include <span>
+ #include <vector>
+ 
+ namespace rex::memory {
+@@ -101,6 +102,12 @@ class DestinosNativos {
+   virtual bool Dibujar(const PeticionDibujo& peticion) = 0;
+   // Debugging: every texture resolved during the next frame is written to the SD card as a BMP (a backend that can).
+   virtual void PedirVolcado() {}
++  // Shaders to compile ahead, in the background, before a draw needs them: `pronto` ones (the game just created
++  // them, a scene is loading) before the rest. Any thread. Default: ignored.
++  virtual void Precompilar(std::span<const EntradaShader* const> shaders, bool pronto) {
++    (void)shaders;
++    (void)pronto;
++  }
+   virtual EstadisticasDibujos EstadisticasDeDibujos() const = 0;
+   // Deferred vertex copies finished: before returning the read pointer to the game.
+   virtual void EsperarSubidas() = 0;
+diff --git i/src/ui/deko3d/compilador.cpp w/src/ui/deko3d/compilador.cpp
+index 8a77351..5605553 100644
+--- i/src/ui/deko3d/compilador.cpp
++++ w/src/ui/deko3d/compilador.cpp
+@@ -107,7 +107,12 @@ void Compilador::Encolar(bool vertices, std::string glsl, Hecho hecho) {
+ Compilador::Resultado Compilador::Compilar(bool vertices, std::string glsl) {
+   std::promise<Resultado> promesa;
+   std::future<Resultado> futuro = promesa.get_future();
+-  Encolar(vertices, std::move(glsl), [&promesa](Resultado r) { promesa.set_value(std::move(r)); });
++  {
++    std::lock_guard<std::mutex> cerrojo(datos_->candado);
++    datos_->cola.push_front({vertices, std::move(glsl), [&promesa](Resultado r) { promesa.set_value(std::move(r)); }});
++    ++datos_->pendientes;
++  }
++  datos_->hay_trabajo.notify_one();
+   return futuro.get();
+ }
+ 
+diff --git i/src/x360/deko/dibujos.cpp w/src/x360/deko/dibujos.cpp
+index 60d1620..95b1d96 100644
+--- i/src/x360/deko/dibujos.cpp
++++ w/src/x360/deko/dibujos.cpp
+@@ -86,6 +86,11 @@ REXCVAR_DEFINE_BOOL(nfsmw_dk_compilar_en_fondo, true, "NFSMW",
+                     "plano; mientras, dibuja la que conserva todos los interpoladores. false = se compila en el acto")
+     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
+ 
++REXCVAR_DEFINE_BOOL(deko_precompilar, true, "deko3d",
++                    "Compile the game's shaders in the background before a draw needs them (the ones of a scene "
++                    "being loaded first), so that a new scene does not stall the ring thread compiling on the spot")
++    .lifecycle(rex::cvar::Lifecycle::kInitOnly);
++
+ namespace rex::x360 {
+ namespace {
+ 
+@@ -1029,6 +1034,83 @@ void RenderDk::RecogerCompilaciones() {
+   if (fallidas) {
+     REXLOG_WARN("[deko3d] {} background compilations failed (keeping the full variant)", fallidas);
+   }
++  AvanzarPrecompilacion();
++}
++
++void RenderDk::Precompilar(std::span<const EntradaShader* const> shaders, bool pronto) {
++  static const bool activo = REXCVAR_GET(deko_precompilar);
++  if (!activo || shaders.empty()) {
++    return;
++  }
++  std::lock_guard<std::mutex> cerrojo(precompilar_candado_);
++  auto& cola = pronto ? precompilar_pronto_ : precompilar_resto_;
++  for (const EntradaShader* e : shaders) {
++    if (e && !e->spirv.empty()) {
++      pronto ? cola.push_front(e) : cola.push_back(e);  // the newest scene first
++    }
++  }
++}
++
++// Once per Swap: queues the variants a draw asks for first - a pixel shader as the library has it and a vertex
++// shader with every interpolator (while that one draws, the exact variant compiles on the worker) - for the next
++// shaders waiting. The worker gets at most two of them at a time, so a compile that a draw waits for (Compilar,
++// which jumps the queue) waits for one at most.
++void RenderDk::AvanzarPrecompilacion() {
++  constexpr uint32_t kEnCola = 2, kRevisadosPorSwap = 8;
++  uint32_t revisados = 0;
++  while (revisados < kRevisadosPorSwap && compilador_.Pendientes() < kEnCola) {
++    const EntradaShader* e = nullptr;
++    {
++      std::lock_guard<std::mutex> cerrojo(precompilar_candado_);
++      auto& cola = !precompilar_pronto_.empty() ? precompilar_pronto_ : precompilar_resto_;
++      if (cola.empty()) {
++        break;
++      }
++      e = cola.front();
++      cola.pop_front();
++    }
++    ++revisados;
++    precompilar_avisado_ = false;
++    InfoShader& info = InfoDe(*e);
++    // A vertex shader's specialization bit 0 is the one draws set most; try both values it can take.
++    const uint32_t especs[2] = {0, e->vertices ? (1u & info.mascara) : 0u};
++    for (uint32_t i = 0; i < (especs[1] ? 2u : 1u); ++i) {
++      const uint32_t variante = e->vertices ? kTodasLasSalidas : 0u;
++      const deko::CacheDksh::Clave clave_cache{info.huella, especs[i], variante};
++      if (cache_.Buscar(clave_cache)) {
++        ++precompilar_en_cache_;
++        continue;
++      }
++      const uint64_t h = XXH3_64bits(&clave_cache, sizeof(clave_cache));
++      if (!en_fondo_.emplace(h, true).second) {
++        continue;
++      }
++      const deko::GlslDeko g = deko::SpirvAGlsl(e->spirv, especs[i], kTodasLasSalidas);
++      if (g.glsl.empty()) {
++        continue;
++      }
++      ++precompilados_;
++      std::weak_ptr<Bandeja> bandeja = bandeja_;
++      compilador_.Encolar(e->vertices, g.glsl, [bandeja, clave_cache](deko::Compilador::Resultado r) {
++        if (const auto b = bandeja.lock()) {
++          std::lock_guard<std::mutex> cerrojo(b->candado);
++          if (r.ok) {
++            b->hechas.emplace_back(clave_cache, std::move(r.dksh));
++          } else {
++            ++b->fallidas;
++          }
++        }
++      });
++    }
++  }
++  if (!precompilar_avisado_ && revisados == 0 && compilador_.Pendientes() == 0) {
++    std::lock_guard<std::mutex> cerrojo(precompilar_candado_);
++    if (precompilar_pronto_.empty() && precompilar_resto_.empty()) {
++      precompilar_avisado_ = true;
++      REXLOG_INFO("[deko3d] shaders compiled ahead: {} so far ({} variants were already in the cache)",
++                  precompilados_, precompilar_en_cache_);
++    }
++  }
+ }
+ 
+ // ---- The draw

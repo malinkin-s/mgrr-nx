@@ -11,6 +11,7 @@
 #include "mgrr_pm4.h"
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <cstring>
 #include <iterator>
@@ -627,6 +628,55 @@ Decoder::AliasScope::~AliasScope() {
   for (uint32_t i = 0; i < count_; ++i) decoder_.registers_[saved_[i].first] = saved_[i].second;
 }
 
+bool Decoder::ClearVertex(float position[3], float color[4]) const {
+  namespace g = rex::graphics;
+  // The vertex fetches (FetchOpcode::kVertexFetch) of the clear's vertex shader, from its exec instructions as
+  // AddFetchedSamplers walks them (mgrr_shaders.cpp). Direct3D's clear reads float3 position and float4 color.
+  struct Fetch {
+    uint32_t slot, stride;
+    int32_t offset;
+  };
+  std::vector<Fetch> fetches;
+  const std::vector<uint32_t>& code = vs_microcode_;
+  size_t first_instruction = code.size() / 3;
+  for (size_t pair = 0; pair * 3 + 2 < code.size() && pair * 2 < first_instruction; ++pair) {
+    const uint32_t* w = &code[pair * 3];
+    const uint64_t cf[2] = {uint64_t(w[0]) | (uint64_t(w[1] & 0xFFFF) << 32),
+                            uint64_t((w[1] >> 16) | (w[2] << 16)) | (uint64_t(w[2] >> 16) << 32)};
+    for (uint64_t c : cf) {
+      const uint32_t opcode = uint32_t(c >> 44) & 0xF;
+      if (!((opcode >= 1 && opcode <= 6) || opcode == 13 || opcode == 14)) continue;
+      const uint32_t address = uint32_t(c) & 0xFFF, count = uint32_t(c >> 12) & 0x7;
+      const uint32_t sequence = uint32_t(c >> 16) & 0xFFF;
+      if (count) first_instruction = std::min<size_t>(first_instruction, address);
+      for (uint32_t i = 0; i < count; ++i) {
+        const size_t at = size_t(address + i) * 3;
+        if (!((sequence >> (i * 2)) & 0x1) || at + 2 >= code.size() || (code[at] & 0x1F) != 0) continue;
+        const int32_t offset = (int32_t(code[at + 2] << 1) >> 9) * 4;
+        const uint32_t stride = (code[at + 2] & 0xFF) * 4;
+        if (stride) {
+          fetches.push_back({((code[at] >> 20) & 0x1F) * 3 + ((code[at] >> 25) & 0x3), stride, offset});
+        } else if (!fetches.empty()) {
+          fetches.push_back({fetches.back().slot, fetches.back().stride, offset});  // a mini fetch: the same buffer
+        }
+      }
+    }
+  }
+  if (fetches.size() < 2) return false;
+  std::sort(fetches.begin(), fetches.end(), [](const Fetch& a, const Fetch& b) { return a.offset < b.offset; });
+  auto read = [&](const Fetch& f, float* out, uint32_t n) {
+    const uint32_t* fc = &registers_[g::XE_GPU_REG_SHADER_CONSTANT_FETCH_00_0 + (f.slot / 3) * 6 + (f.slot % 3) * 2];
+    const uint32_t base = (fc[0] & 0x1FFFFFFC) + uint32_t(f.offset);
+    for (uint32_t k = 0; k < n; ++k) {
+      const uint32_t word = rex::memory::load_and_swap<uint32_t>(memory_->TranslatePhysical<uint8_t*>(base + k * 4));
+      std::memcpy(&out[k], &word, 4);
+    }
+  };
+  read(fetches[0], position, 3);
+  read(fetches[1], color, 4);
+  return std::isfinite(position[2]);
+}
+
 // A Direct3D clear draw, as the renderer's clears (ds2-nx's EmulateClear, ds2_gpu.cpp). Direct3D's fast clear binds
 // c0 (the color to clear) and, for the depth buffer, c1-c3 over the depth buffer's EDRAM written as color, with a
 // placeholder depth target that may sit on c0's base. So: c0 is cleared as color; c1-c3 on another base than c0 clear
@@ -656,13 +706,23 @@ void Decoder::EmulateClear(uint32_t msaa) {
   const uint32_t depth_info = r[g::XE_GPU_REG_RB_DEPTH_INFO];
   const uint32_t depth_control = r[g::XE_GPU_REG_RB_DEPTHCONTROL];
   const bool depth_only = (r[g::XE_GPU_REG_RB_MODECONTROL] & 0x7) == 5;
+  // The clear's own values are in its vertices: z is the depth, and the color is what its pixel shader writes. Without
+  // them, a guess: the far end of the scene's depth test, and 0 for a multisampled color (as in Dead Space 2).
+  float position[3] = {}, vertex_color[4] = {};
+  const bool from_vertex = ClearVertex(position, vertex_color);
   const bool reversed = depth_greater_ > depth_less_;
   uint32_t stencil = 0;
   if ((depth_control & 0x1) && ((depth_control >> 14) & 0x7) == 2) {
     const uint32_t ref_mask = r[g::XE_GPU_REG_RB_STENCILREFMASK];
     stencil = ref_mask & (ref_mask >> 16) & 0xFF;
   }
-  const uint32_t depth_value = (reversed ? 0u : 0xFFFFFF00u) | stencil;
+  uint32_t depth24 = reversed ? 0u : 0xFFFFFFu;
+  if (from_vertex) {
+    const float z = std::clamp(position[2], 0.0f, 1.0f);
+    depth24 = (depth_info >> 16) & 0x1 ? rex::graphics::xenos::Float32To20e4(z, true)  // DepthRenderTargetFormat::kD24FS8
+                                       : uint32_t(std::lround(double(z) * 16777215.0));
+  }
+  const uint32_t depth_value = (depth24 << 8) | stencil;
   constexpr uint32_t kNullCommand = 3u << 20;  // CopyCommand::kNull: clear only, copy nothing
   std::string what;
   auto clear_depth_at = [&](uint32_t edram_base) {
@@ -678,7 +738,11 @@ void Decoder::EmulateClear(uint32_t msaa) {
   // The color: the multisampled ones clear to 0 (as seen in Dead Space 2); a single-sampled one takes what
   // Direct3D's clear shader writes, the pixel shader's c0.
   uint32_t color = 0;
-  if (!msaa) {
+  if (msaa && from_vertex) {
+    for (uint32_t j = 0; j < 4; ++j) {
+      color |= uint32_t(std::lround(std::clamp(vertex_color[j], 0.0f, 1.0f) * 255.0f)) << (j * 8);
+    }
+  } else if (!msaa) {
     for (uint32_t j = 0; j < 4; ++j) {
       float v;
       std::memcpy(&v, &registers_[g::XE_GPU_REG_SHADER_CONSTANT_256_X + j], 4);
@@ -708,22 +772,27 @@ void Decoder::EmulateClear(uint32_t msaa) {
       std::find(aliased_depth, aliased_depth + n_aliased, z_base) == aliased_depth + n_aliased) {
     clear_depth_at(z_base);
     // Depth written over c0's EDRAM: on the console the same bytes are the color target's, so the color is cleared
-    // by it. The renderer keeps depth and color apart, so the color image is cleared too.
+    // by it: to the depth and stencil word, seen as color (MGR's shadow mask reads that EDRAM as 8-bit color after a
+    // depth-only clear to 1.0 and stencil 0xFF, and needs it white). The renderer keeps depth and color apart, so the
+    // color image is cleared too.
     if (z_base == c0_base && (mask & 0xF)) {
       rex::x360::RegistrosCopia c = base;
       c.rb_copy_control = (1u << 8) | kNullCommand;
-      c.rb_color_clear = 0;
+      c.rb_color_clear = depth_value;
       c.rb_color_clear_lo = 0;
       renderer->Copiar(c);
-      what += fmt::format(" c0={:03X} (by the depth over it)", c0_base);
+      what += fmt::format(" c0={:03X}={:08X} (by the depth over it)", c0_base, depth_value);
     }
   }
   ++stats_.clears_emulated;
   if (clears_logged_ < 16) {
     ++clears_logged_;
-    REXLOG_INFO("[gpu] Direct3D clear (msaa {}, pitch {}, mode {}):{}; depthcontrol {:08X} mask {:04X}", msaa,
+    REXLOG_INFO("[gpu] Direct3D clear (msaa {}, pitch {}, mode {}):{}; depthcontrol {:08X} mask {:04X}; {}", msaa,
                 registers_[g::XE_GPU_REG_RB_SURFACE_INFO] & 0x3FFF, r[g::XE_GPU_REG_RB_MODECONTROL] & 0x7, what,
-                depth_control, mask);
+                depth_control, mask,
+                from_vertex ? fmt::format("from its vertex: z {} color {} {} {} {}", position[2], vertex_color[0],
+                                          vertex_color[1], vertex_color[2], vertex_color[3])
+                            : std::string("guessed (no vertex)"));
   }
 }
 

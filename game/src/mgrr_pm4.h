@@ -101,6 +101,9 @@ class Decoder {
   void LoadShader(uint32_t type, uint32_t address);
   void Draw();
   void EmulateClear(uint32_t msaa);
+  // The first vertex of a Direct3D clear draw: position (its z is the clear depth) and color, read through the vertex
+  // fetches of the clear's vertex shader. false if they cannot be found.
+  bool ClearVertex(float position[3], float color[4]) const;
   void OcclusionQuery(uint32_t address);
 
   // The register mirror with a multisampled surface turned into the 1x surface it aliases, undone when the scope
