@@ -49,8 +49,22 @@ EOF
 
 echo "replaying $name in Ryujinx ($passes passes)..."
 status=0
+# Ryujinx does not exit after the game does (it keeps retrying ConnectToNamedPort until the timeout): once the game's
+# log says it is exiting, it is stopped.
+newest_before=$(ls -t "$sd/logs"/*.log 2>/dev/null | head -1)
 timeout 600 "$ryujinx" --no-gui --root-data-dir "$data" --graphics-backend Vulkan --disable-docked-mode \
-  --resolution-scale 1 "$sd/mgrr_clang.nro" > "$run/ryujinx.txt" 2>&1 || status=$?
+  --resolution-scale 1 "$sd/mgrr_clang.nro" > "$run/ryujinx.txt" 2>&1 &
+emu=$!
+while kill -0 $emu 2>/dev/null; do
+  current=$(ls -t "$sd/logs"/*.log 2>/dev/null | head -1)
+  if [ -n "$current" ] && [ "$current" != "$newest_before" ] && grep -q "Switch: exiting process" "$current"; then
+    sleep 3
+    pkill -P $emu 2>/dev/null; kill $emu 2>/dev/null
+    break
+  fi
+  sleep 2
+done
+wait $emu 2>/dev/null || status=$?
 cp -r "$sd/replay_out/." "$run/" 2>/dev/null || true
 for d in "$sd"/volcado_*; do [ -d "$d" ] && cp -r "$d" "$run/dump"; done
 log=$(ls -t "$sd/logs"/*.log 2>/dev/null | head -1)

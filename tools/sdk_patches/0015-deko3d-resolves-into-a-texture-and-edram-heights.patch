@@ -1,0 +1,149 @@
+deko3d: resolves into part of a texture; target heights bounded by the EDRAM.
+
+- MGR resolves its two shadow cascades, each drawn at 1024x1024, into one 1024x2048 texture: the
+  second one 4 MB past the first, the start of the lower half. Textures being images keyed by
+  address, the second made a texture nothing samples and the lower half stayed empty.
+  ResueltaQueContiene finds the texture whose memory holds a resolve's address at the start of a
+  row of tiles, and the resolve is written there, that many rows down.
+- A target's height came from its pitch only (1280 rows for a pitch of 1280). It is now also
+  bounded by what fits between its base and the end of the EDRAM: MGR's scene targets at base
+  0x530 are 1280x720, the size of their textures, so a whole resolve can swap images instead of
+  copying (nfsmw_nativo_resolver_sin_copia).
+
+diff --git i/include/rex/x360/deko/render.h w/include/rex/x360/deko/render.h
+index 0a5f279..0e4d5a4 100644
+--- i/include/rex/x360/deko/render.h
++++ w/include/rex/x360/deko/render.h
+@@ -265,6 +265,9 @@ class RenderDk final : public DestinosNativos {
+     uint32_t formato_guest = 0;
+     bool escrita = false;
+   };
++  // A resolved texture of 4-byte texels whose memory holds `base` at the start of a row of 32x32 tiles, as wide
++  // as `ancho` and of the same guest format: a copy to `base` writes into it, `filas` rows down.
++  Resuelta* ResueltaQueContiene(uint32_t base, uint32_t ancho, uint32_t alto, uint32_t formato_guest, uint32_t& filas);
+   // The frame dump (PedirVolcado): from one Swap to the next, each resolved texture written is copied to a read-back
+   // block; at the next Swap the GPU is waited for and they are written as BMPs (destinos.cpp, TerminarVolcado).
+   struct EntradaVolcado {
+diff --git i/src/x360/deko/destinos.cpp w/src/x360/deko/destinos.cpp
+index 3d280d9..ed933c3 100644
+--- i/src/x360/deko/destinos.cpp
++++ w/src/x360/deko/destinos.cpp
+@@ -833,6 +833,18 @@ bool FormatoResueltaDk(uint32_t formato_copia, DkImageFormat& host) {
+   }
+ }
+ 
++// The height of a target: from its pitch, as the Vulkan path (nfsmw_nativo_destinos.cpp, ObtenerDestino explains
++// why), but never past the end of the EDRAM (2048 tiles of 80x16 pixels at 32 bits, 40x16 at 64): a target cannot
++// hold more rows than fit between its base and there. MGR's 1280x720 scene targets at base 0x530 fill exactly what
++// is left; made 1280x1280 they were never the size of their 1280x720 textures, so a whole resolve always copied.
++static uint32_t AltoDestino(uint32_t base, uint32_t pitch, bool bpp64) {
++  const uint32_t alto = std::min(kAltoMaximoDestino, std::max<uint32_t>(720, (pitch + 15) & ~15u));
++  const uint32_t teselas_por_fila = (pitch + (bpp64 ? 39 : 79)) / (bpp64 ? 40 : 80);
++  const uint32_t libres = base < 2048 ? 2048 - base : 0;
++  const uint32_t filas = teselas_por_fila ? libres / teselas_por_fila * 16 : alto;
++  return filas >= 16 ? std::min(alto, filas) : alto;
++}
++
+ ImagenDk* RenderDk::DestinoColor(uint32_t base, uint32_t formato, uint32_t pitch) {
+   if (!pitch) {
+     Rechazar(7, "render target with pitch 0");
+@@ -842,8 +854,8 @@ ImagenDk* RenderDk::DestinoColor(uint32_t base, uint32_t formato, uint32_t pitch
+   if (auto it = destinos_.find(clave); it != destinos_.end()) {
+     return &it->second;
+   }
+-  // The height from the pitch, as the Vulkan path (nfsmw_nativo_destinos.cpp, ObtenerDestino explains why).
+-  const uint32_t alto = std::min(kAltoMaximoDestino, std::max<uint32_t>(720, (pitch + 15) & ~15u));
++  // k_16_16_16_16, k_16_16_16_16_FLOAT and k_32_32_FLOAT take 64 bits per pixel.
++  const uint32_t alto = AltoDestino(base, pitch, formato == 5 || formato == 7 || formato == 15);
+   ImagenDk imagen;
+   DkImageFormat formato_host = DkImageFormat_RGBA8_Unorm;
+   if (!FormatoDestinoColorDk(formato, formato_host)) {
+@@ -873,7 +885,7 @@ ImagenDk* RenderDk::DestinoProfundidad(uint32_t base, uint32_t formato, uint32_t
+   if (auto it = profundidades_.find(clave); it != profundidades_.end()) {
+     return &it->second;
+   }
+-  const uint32_t alto = std::min(kAltoMaximoDestino, std::max<uint32_t>(720, (pitch + 15) & ~15u));
++  const uint32_t alto = AltoDestino(base, pitch, false);
+   ImagenDk imagen;
+   // Both guest depth formats (24-bit fixed and float) as D24S8, as the Vulkan path does on the console. No
+   // compression: untested on deko3d, and copies broke it on nouveau (HowToDeko3d.md, section 5.10).
+@@ -889,6 +901,39 @@ ImagenDk* RenderDk::DestinoProfundidad(uint32_t base, uint32_t formato, uint32_t
+   return &nueva;
+ }
+ 
++// MGR resolves its two shadow cascades, each drawn at 1024x1024, into one 1024x2048 texture: the first at the
++// texture's address, the second 4 MB further, which is the start of its lower half. As textures are images keyed by
++// address, the second one made a texture nothing samples and the lower half stayed empty.
++RenderDk::Resuelta* RenderDk::ResueltaQueContiene(uint32_t base, uint32_t ancho, uint32_t alto, uint32_t formato_guest,
++                                                  uint32_t& filas) {
++  const uint32_t fila_de_teselas = ((ancho + 31) & ~31u) * 32 * 4;
++  for (auto& [b, r] : resueltas_) {
++    if (b >= base || r.imagen.ancho != ancho || r.formato_guest != formato_guest) {
++      continue;
++    }
++    switch (r.imagen.formato) {
++      case DkImageFormat_RGBA8_Unorm:
++      case DkImageFormat_R32_Float:
++      case DkImageFormat_RGB10A2_Unorm:
++      case DkImageFormat_RG16_Float:
++      case DkImageFormat_Z24S8:
++        break;
++      default:
++        continue;
++    }
++    const uint32_t offset = base - b;
++    if (offset % fila_de_teselas) {
++      continue;
++    }
++    const uint64_t desde = uint64_t(offset / fila_de_teselas) * 32;
++    if (desde + alto <= r.imagen.alto) {
++      filas = uint32_t(desde);
++      return &r;
++    }
++  }
++  return nullptr;
++}
++
+ RenderDk::Resuelta* RenderDk::ObtenerResuelta(uint32_t base, uint32_t ancho, uint32_t alto, uint32_t formato,
+                                               bool intercambio_rb, bool profundidad) {
+   if (!ancho || !alto) {
+@@ -1144,8 +1189,14 @@ bool RenderDk::Copiar(const RegistrosCopia& reg) {
+       const uint32_t ancho_resolve = uint32_t(x1 - x0);
+       const uint32_t ancho_textura =
+           x0 == 0 && ancho_resolve < pitch_destino && ancho_resolve + 32 > pitch_destino ? ancho_resolve : pitch_destino;
+-      resuelta = ObtenerResuelta(base & 0x1FFFFFFF, ancho_textura, alto_destino, formato_destino,
+-                                 (info_destino >> 24) & 0x1, false);
++      uint32_t filas = 0;
++      if (resueltas_.find(base & 0x1FFFFFFF) == resueltas_.end() &&
++          (resuelta = ResueltaQueContiene(base & 0x1FFFFFFF, ancho_textura, alto_destino, formato_destino, filas))) {
++        dy += filas;
++      } else {
++        resuelta = ObtenerResuelta(base & 0x1FFFFFFF, ancho_textura, alto_destino, formato_destino,
++                                   (info_destino >> 24) & 0x1, false);
++      }
+     }
+     if (resuelta) {
+       const uint32_t pedido_ancho = std::min(uint32_t(x1 - x0), destino_render->ancho - uint32_t(x0));
+@@ -1447,13 +1498,20 @@ void RenderDk::CopiarProfundidad(const RegistrosCopia& reg, uint32_t pitch, bool
+   // At its own position in the texture at the copy's base, as for color (Copiar).
+   const uint32_t base = reg.rb_copy_dest_base & 0x1FFFFFFF;
+   const uint32_t dx = uint32_t(x0);
+-  const uint32_t dy = uint32_t(y0);
++  uint32_t dy = uint32_t(y0);
+   const uint32_t formato_textura = ((info >> 16) & 0x1) ? 23 : 22;  // k_24_8_FLOAT : k_24_8
+   // Its width as for color (the pitch is padded to 32 texels; see Copiar).
+   const uint32_t ancho_resolve = uint32_t(x1 - x0);
+   const uint32_t ancho_textura =
+       x0 == 0 && ancho_resolve < pitch_destino && ancho_resolve + 32 > pitch_destino ? ancho_resolve : pitch_destino;
+-  Resuelta* resuelta = ObtenerResuelta(base, ancho_textura, alto_destino, formato_textura, false, true);
++  uint32_t filas = 0;
++  Resuelta* resuelta = nullptr;
++  if (resueltas_.find(base) == resueltas_.end() &&
++      (resuelta = ResueltaQueContiene(base, ancho_textura, alto_destino, formato_textura, filas))) {
++    dy += filas;
++  } else {
++    resuelta = ObtenerResuelta(base, ancho_textura, alto_destino, formato_textura, false, true);
++  }
+   if (!resuelta) {
+     return;
+   }

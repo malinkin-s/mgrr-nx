@@ -1,0 +1,25 @@
+deko3d: the swapchain image wait on the UI thread gives up after 100 ms.
+
+If the display has not let go of the image by then, the wait goes into the queue as before
+(0013), so a fence that never signals cannot hold the UI thread forever.
+
+diff --git i/src/ui/deko3d/nucleo.cpp w/src/ui/deko3d/nucleo.cpp
+index d68ca9c..c619a01 100644
+--- i/src/ui/deko3d/nucleo.cpp
++++ w/src/ui/deko3d/nucleo.cpp
+@@ -197,8 +197,14 @@ int Dispositivo::Adquirir(DkSwapchain cadena) {
+   DkFence valla;
+   dkSwapchainAcquireImage(cadena, &imagen, &valla);
+   const uint64_t antes = AhoraNs();
+-  dkFenceWait(&valla, -1);
++  const DkResult espera = dkFenceWait(&valla, 100'000'000);  // ns
+   ns_esperando_imagen_.fetch_add(AhoraNs() - antes, std::memory_order_relaxed);
++  if (espera != DkResult_Success) {
++    // Not released in 100 ms (at exit, Ryujinx never releases it): the queue waits for it, as it used to.
++    std::lock_guard<std::mutex> cerrojo(candado_);
++    ComprobarCola("waiting for a swapchain image");
++    dkQueueWaitFence(cola_, &valla);
++  }
+   return imagen;
+ }
+ 
