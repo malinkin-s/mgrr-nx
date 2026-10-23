@@ -449,11 +449,33 @@ float4 cube(float4 value, inout CubeMapData cubeMapData)
     return float4(0.0, 0.0, 0.0, index);
 }
 
+// mgr-nx: the Xenos multiplies as Direct3D 9 does: 0 (or a denormal) times anything is +0, also times infinity or
+// NaN, where IEEE gives NaN. Xenia does it for MUL, MAD, DP2ADD/DP3/DP4, DST and the scalar MULs
+// (shader/interpreter.cpp); without it, lighting that multiplies a zero term by rcp(0) or log(0) made NaN pixels,
+// drawn black: the specks that flickered on Raiden's face.
+template <typename T>
+T mulz(T a, T b)
+{
+    return select(or(a == (T)0, b == (T)0), (T)0, a * b);
+}
+
+template <typename T>
+T madz(T a, T b, T c)
+{
+    return mulz(a, b) + c;
+}
+
+template <typename T>
+float dotz(T a, T b)
+{
+    return dot(mulz(a, b), (T)1);
+}
+
 float4 dst(float4 src0, float4 src1)
 {
     float4 dest;
     dest.x = 1.0;
-    dest.y = src0.y * src1.y;
+    dest.y = mulz(src0.y, src1.y);
     dest.z = src0.z;
     dest.w = src1.w;
     return dest;

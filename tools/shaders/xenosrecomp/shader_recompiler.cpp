@@ -744,7 +744,7 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
             break;
 
         case AluVectorOpcode::Mul:
-            print("{} * {}", op(VECTOR_0), op(VECTOR_1));
+            print("mulz({}, {})", op(VECTOR_0), op(VECTOR_1));
             break;
 
         /*
@@ -802,7 +802,7 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
             break;
 
         case AluVectorOpcode::Mad:
-            print("{} * {} + {}", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            print("madz({}, {}, {})", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
             break;
 
         case AluVectorOpcode::CndEq:
@@ -819,11 +819,11 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
 
         case AluVectorOpcode::Dp4:
         case AluVectorOpcode::Dp3:
-            print("dot({}, {})", op(VECTOR_0), op(VECTOR_1));
+            print("dotz({}, {})", op(VECTOR_0), op(VECTOR_1));
             break;
 
         case AluVectorOpcode::Dp2Add:
-            print("dot({}, {}) + {}", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
+            print("dotz({}, {}) + {}", op(VECTOR_0), op(VECTOR_1), op(VECTOR_2));
             break;
 
         case AluVectorOpcode::Cube:
@@ -929,12 +929,12 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
             break;
 
         case AluScalarOpcode::Muls:
-            print("{} * {}", op(SCALAR_0), op(SCALAR_1));
+            print("mulz({}, {})", op(SCALAR_0), op(SCALAR_1));
             break;
 
         case AluScalarOpcode::MulsPrev:
         case AluScalarOpcode::MulsPrev2:
-            print("{} * ps", op(SCALAR_0));
+            print("mulz({}, ps)", op(SCALAR_0));
             break;
 
         // Same as above, for the scalar channel: MAXs dst, src, src is the Xenos MOV.
@@ -1064,7 +1064,7 @@ void ShaderRecompiler::recompile(const AluInstruction& instr)
 
         case AluScalarOpcode::Mulsc0:
         case AluScalarOpcode::Mulsc1:
-            print("{} * {}", op(SCALAR_CONSTANT_0), op(SCALAR_CONSTANT_1));
+            print("mulz({}, {})", op(SCALAR_CONSTANT_0), op(SCALAR_CONSTANT_1));
             break;
 
         case AluScalarOpcode::Addsc0:
