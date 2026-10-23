@@ -8,13 +8,21 @@
 сделанный статической рекомпиляцией, без эмулятора.
 
 [![Switch](https://img.shields.io/badge/Nintendo_Switch-Homebrew-E60012?style=for-the-badge&logo=nintendoswitch&logoColor=white)](#)
-[![Status](https://img.shields.io/badge/Статус-Рисует_игру_(M2)-orange?style=for-the-badge)](#состояние)
+[![Status](https://img.shields.io/badge/Статус-В_архиве-lightgrey?style=for-the-badge)](#состояние)
 [![Architecture](https://img.shields.io/badge/Архитектура-PowerPC_→_AArch64-0091BD?style=for-the-badge&logo=arm&logoColor=white)](#)
 [![License](https://img.shields.io/badge/Лицензия-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 
 [English](README.md) | **Русский**
 
 </div>
+
+> [!NOTE]
+> **Проект в архиве (октябрь 2026).** Он остановился на этапе M2: игра запускается и рисует стартовый экран,
+> обучение и миссию R-00 на Switch собственным рендерером на deko3d (уровень команд GPU). Играбельный порт —
+> **[mgr-nx-deko](https://github.com/tuancapoo/mgr-nx-deko)**. Исправления и инструменты остаются доступны под
+> GPL-3.0: патчи SDK в `tools/sdk_patches/` (в том числе `0011` — память гостя не возвращалась, из-за чего игра
+> зависала после первого босса), правило умножения Xenos в `tools/shaders/xenosrecomp/`, графический стенд
+> (`tools/emu_test.sh`) и находки в [NOTES.md](NOTES.md).
 
 ---
 

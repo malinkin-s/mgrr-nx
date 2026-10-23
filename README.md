@@ -8,13 +8,21 @@ An unofficial native Nintendo Switch port of **Metal Gear Rising: Revengeance** 
 made by static recompilation: no emulator.
 
 [![Switch](https://img.shields.io/badge/Nintendo_Switch-Homebrew-E60012?style=for-the-badge&logo=nintendoswitch&logoColor=white)](#)
-[![Status](https://img.shields.io/badge/Status-Renders_in--game_(M2)-orange?style=for-the-badge)](#status)
+[![Status](https://img.shields.io/badge/Status-Archived-lightgrey?style=for-the-badge)](#status)
 [![Architecture](https://img.shields.io/badge/Architecture-PowerPC_→_AArch64-0091BD?style=for-the-badge&logo=arm&logoColor=white)](#)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue?style=for-the-badge)](LICENSE)
 
 **English** | [Русский](README_RU.md)
 
 </div>
+
+> [!NOTE]
+> **This project is archived (October 2026).** It stopped at milestone M2: the game boots and renders the title
+> screen, training and mission R-00 on the Switch, with our own PM4-level renderer on deko3d. For a playable port see
+> **[mgr-nx-deko](https://github.com/tuancapoo/mgr-nx-deko)**. The fixes and tools here stay available under the
+> GPL-3.0: the SDK patches in `tools/sdk_patches/` (among them `0011`, guest memory never given back, which hung
+> the game after the first boss), the Xenos multiply rule in `tools/shaders/xenosrecomp/`, the graphics test bench
+> (`tools/emu_test.sh`) and the findings in [NOTES.md](NOTES.md).
 
 ---
 
